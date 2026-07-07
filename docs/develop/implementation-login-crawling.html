@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TBELL Employ 구현기획서 - 로그인 기반 크롤링</title>
+  <style>
+    :root {
+      --bg: #f4f7fb;
+      --surface: #ffffff;
+      --line: #dce4ee;
+      --text: #1f2937;
+      --muted: #5b6b80;
+      --primary: #0f766e;
+      --primary-soft: #e6f7f5;
+      --warn: #b45309;
+      --danger: #b91c1c;
+      --radius: 12px;
+      --shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Pretendard", "Segoe UI", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.65;
+    }
+    .wrap {
+      width: min(1100px, calc(100% - 40px));
+      margin: 20px auto 48px;
+    }
+    .hero {
+      border-radius: 18px;
+      background: linear-gradient(135deg, #115e59 0%, #0f766e 60%, #14b8a6 100%);
+      color: #ecfeff;
+      padding: 30px 32px;
+      box-shadow: var(--shadow);
+      margin-bottom: 16px;
+    }
+    .hero h1 {
+      margin: 0;
+      font-size: clamp(1.35rem, 2.2vw, 2rem);
+      letter-spacing: -0.01em;
+    }
+    .hero p { margin: 10px 0 0; opacity: 0.95; }
+    .meta { margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap; }
+    .meta span {
+      border: 1px solid rgba(255, 255, 255, 0.35);
+      border-radius: 999px;
+      font-size: 0.78rem;
+      padding: 3px 10px;
+      background: rgba(255, 255, 255, 0.12);
+    }
+    section {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 22px 24px;
+      margin-bottom: 12px;
+    }
+    h2 {
+      margin: 0 0 12px;
+      font-size: 1.15rem;
+      color: #0f172a;
+    }
+    h3 {
+      margin: 14px 0 8px;
+      font-size: 1rem;
+      color: #1e293b;
+    }
+    ul, ol { margin: 0 0 10px; padding-left: 1.2rem; }
+    li { margin-bottom: 5px; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+      margin-top: 8px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 9px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #f8fbff; }
+    code {
+      font-family: Consolas, Menlo, monospace;
+      background: #eef2ff;
+      border-radius: 4px;
+      padding: 2px 5px;
+      font-size: 0.84em;
+    }
+    .note {
+      background: var(--primary-soft);
+      border-left: 4px solid var(--primary);
+      padding: 10px 12px;
+      border-radius: 0 8px 8px 0;
+      color: #134e4a;
+      margin-bottom: 10px;
+      font-size: 0.92rem;
+    }
+    .warn {
+      background: #fff7ed;
+      border-left: 4px solid var(--warn);
+      color: #7c2d12;
+      padding: 10px 12px;
+      border-radius: 0 8px 8px 0;
+      margin-bottom: 10px;
+      font-size: 0.92rem;
+    }
+    .danger {
+      background: #fef2f2;
+      border-left: 4px solid var(--danger);
+      color: #7f1d1d;
+      padding: 10px 12px;
+      border-radius: 0 8px 8px 0;
+      margin-bottom: 10px;
+      font-size: 0.92rem;
+    }
+    .diagram {
+      white-space: pre;
+      font-family: Consolas, Menlo, monospace;
+      font-size: 0.8rem;
+      line-height: 1.45;
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+      background: #f8fafc;
+      padding: 12px;
+      overflow: auto;
+    }
+    .cols {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    @media (max-width: 900px) {
+      .wrap { width: calc(100% - 20px); }
+      .cols { grid-template-columns: 1fr; }
+      .hero { padding: 24px 18px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="hero">
+      <h1>TBELL Employ 구현기획서<br />로그인 기반 수집 아키텍처</h1>
+      <p>대상: 잡코리아 기업계정(인재검색/포지션 제안), 사람인 기업계정(인재풀), 공고 지원자 수집</p>
+      <div class="meta">
+        <span>문서 버전 v0.1</span>
+        <span>작성일 2026-07-07</span>
+        <span>목적: 운영 가능한 구현안 확정</span>
+      </div>
+    </header>
+
+    <section>
+      <h2>1. 전제 및 제약</h2>
+      <div class="danger">GitHub Pages는 정적 호스팅이므로 플랫폼 기업계정 로그인 주체가 될 수 없다. 로그인/크롤링은 서버 실행 주체(Worker/Runner)에서만 가능하다.</div>
+      <ul>
+        <li>Pages 프런트는 수집 요청/상태조회 UI만 담당</li>
+        <li>실제 로그인, 쿠키 보관, 크롤링은 GitHub Actions 또는 별도 서버에서 수행</li>
+        <li>플랫폼의 2FA, 캡차, 비정상 로그인 탐지는 안정성 리스크</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>2. 권장 아키텍처 (실행안)</h2>
+      <div class="diagram">[GitHub Pages]
+  수집요청 버튼 / 상태조회
+      │
+      ▼
+[GitHub API: workflow_dispatch]
+      │
+      ▼
+[Crawler Runner]
+  Playwright 로그인
+  - 잡코리아 기업계정
+  - 사람인 기업계정
+  지원자/인재풀 데이터 수집
+      │
+      ▼
+[DB + Object Storage]
+  applicants, applications, talent_pool_candidates
+  candidate_documents, crawl_jobs, crawl_logs
+      │
+      ▼
+[Pages]
+  수집 결과 시각화</div>
+
+      <h3>2.1 실행 환경 선택</h3>
+      <table>
+        <thead><tr><th>선택지</th><th>장점</th><th>단점</th><th>권장도</th></tr></thead>
+        <tbody>
+          <tr><td>GitHub Hosted Runner</td><td>구성 간단, 초기비용 낮음</td><td>IP 변동 큼, 로그인 차단 가능성 높음</td><td>중</td></tr>
+          <tr><td>Self-hosted Runner (고정 IP)</td><td>세션 안정성 높음, 차단 리스크 감소</td><td>운영비/관리 필요</td><td>상</td></tr>
+          <tr><td>별도 서버(Queue Worker)</td><td>유연성 최고, 확장성 높음</td><td>초기 구축비 큼</td><td>상</td></tr>
+        </tbody>
+      </table>
+
+      <div class="note">권장: 1차는 <code>Self-hosted Runner + GitHub Actions</code>로 시작, 이후 트래픽 증가 시 Queue Worker로 확장.</div>
+    </section>
+
+    <section>
+      <h2>3. 페이지 구성 기획 (T-Client 유사 + 차별화)</h2>
+      <h3>3.1 UI/브랜딩 방향</h3>
+      <table>
+        <thead><tr><th>항목</th><th>T-Client 공통 요소</th><th>차별화 요소 (Employ)</th></tr></thead>
+        <tbody>
+          <tr><td>레이아웃</td><td>상단 요약 + 카드형 섹션</td><td>채용 운영 전용 3열 보드(신규지원자/인재검색/면접관리)</td></tr>
+          <tr><td>컴포넌트</td><td>필터 칩, 상태 배지, 우측 상세 패널</td><td>추천 태그 타임라인, 면접 일정 캘린더, 노쇼/블락 상태 배지</td></tr>
+          <tr><td>색상 체계</td><td>기존 중립 톤 + 브랜드 포인트</td><td>채용 상태별 고정 컬러(합격/불합/노쇼/완료/제거)</td></tr>
+        </tbody>
+      </table>
+
+      <h3>3.2 페이지 정보구조</h3>
+      <ol>
+        <li>대시보드: 어제 수집건, 오늘 면접 일정, 추천 후보, 상태 변경 요약</li>
+        <li>신규 지원자: 공고 지원 기반 지원자 목록 + 즉시 추천 태그/면접 등록</li>
+        <li>인재검색 후보: 잡코리아 포지션 제안/사람인 인재풀 기반 후보 목록</li>
+        <li>면접 관리: 일정, 면접결과(합/불), 노쇼, 후속 액션 기록</li>
+        <li>운영 로그: 수집 성공률, 실패 내역, 메일 발송 내역</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>4. 로그인 문제 극복 전략</h2>
+      <h3>3.1 계정/인증 전략</h3>
+      <ul>
+        <li>플랫폼별 전용 운영 계정 사용 (개인 계정 금지)</li>
+        <li>2FA는 가능하면 TOTP 기반으로 통일, 백업코드 별도 보관</li>
+        <li>비밀정보는 GitHub Secrets 또는 외부 Vault에서만 조회</li>
+      </ul>
+
+      <h3>3.2 세션 전략 (핵심)</h3>
+      <table>
+        <thead><tr><th>전략</th><th>구현</th><th>효과</th></tr></thead>
+        <tbody>
+          <tr><td>세션 재사용</td><td><code>storageState.json</code> 암호화 저장 후 재사용</td><td>매번 로그인 회피, 차단 감소</td></tr>
+          <tr><td>세션 만료 감지</td><td>수집 시작 시 로그인 페이지 리다이렉트 검사</td><td>자동 재로그인 트리거</td></tr>
+          <tr><td>휴먼 개입 플로우</td><td>캡차 발생 시 job 중단 + 운영자 승인 후 재개</td><td>운영 지속성 확보</td></tr>
+        </tbody>
+      </table>
+
+      <div class="warn">완전 무인 로그인은 플랫폼 정책/캡차 정책에 따라 실패 가능성이 높다. "자동 재시도 + 수동 복구"를 표준 운영 절차로 포함해야 한다.</div>
+    </section>
+
+    <section>
+      <h2>5. GitHub Pages + GitHub Actions 연동 방식</h2>
+      <h3>4.1 Pages에서 가능한 것</h3>
+      <ul>
+        <li><code>workflow_dispatch</code> 호출로 수집 작업 요청</li>
+        <li><code>crawl_jobs</code> 조회로 상태 표시 (queued/running/succeeded/failed)</li>
+        <li>수집 완료 데이터 렌더링</li>
+      </ul>
+
+      <h3>4.2 Pages에서 불가능한 것</h3>
+      <ul>
+        <li>브라우저에서 기업계정 아이디/비밀번호를 직접 보관하고 로그인 실행</li>
+        <li>보안 비밀(Secrets) 접근</li>
+      </ul>
+
+      <h3>4.3 구현 패턴</h3>
+      <ol>
+        <li>Pages에서 "수집 시작" 클릭</li>
+        <li>서명된 요청으로 Actions 워크플로 트리거</li>
+        <li>Runner가 Playwright 로그인/수집 수행</li>
+        <li>DB 저장 후 결과 요약을 <code>crawl_jobs.result_json</code>에 기록</li>
+        <li>Pages가 폴링하여 결과 반영</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>6. 워크플로 설계</h2>
+      <h3>5.1 Actions Workflow</h3>
+      <table>
+        <thead><tr><th>워크플로</th><th>트리거</th><th>역할</th></tr></thead>
+        <tbody>
+          <tr><td><code>crawl-applicants.yml</code></td><td>매일 18:00 KST + manual</td><td>공고 지원자 수집</td></tr>
+          <tr><td><code>crawl-talent-pool.yml</code></td><td>매일 18:20 KST + manual</td><td>잡코리아/사람인 인재풀 수집</td></tr>
+          <tr><td><code>compose-daily-report.yml</code></td><td>매일 07:50 KST</td><td>전일 데이터 집계/요약 본문 생성</td></tr>
+          <tr><td><code>send-daily-mail.yml</code></td><td>매일 08:00 KST</td><td>지정 수신자 메일 발송</td></tr>
+          <tr><td><code>refresh-session.yml</code></td><td>manual + failure hook</td><td>세션 재발급 전용</td></tr>
+        </tbody>
+      </table>
+
+      <h3>6.2 일일 배치 순서</h3>
+      <ol>
+        <li>18:00 공고 지원자 수집 시작 (사이트 순차 실행)</li>
+        <li>18:20 인재검색 후보 수집 시작 (잡코리아 → 사람인)</li>
+        <li>수집 종료 후 중복 정리/상태 동기화</li>
+        <li>07:50 전일 기준 보고 데이터 스냅샷 생성</li>
+        <li>08:00 지정 수신자에게 요약 메일 발송</li>
+      </ol>
+
+      <h3>6.3 Job 단계</h3>
+      <ol>
+        <li>Lock 획득(<code>concurrency</code> + DB lock)으로 중복 실행 방지</li>
+        <li>비밀값 로드 (계정/암호/TOTP seed)</li>
+        <li>로그인 상태 검사 후 필요 시 재로그인</li>
+        <li>플랫폼별 목록/상세 수집</li>
+        <li>PDF/이미지 스냅샷 저장 (Object Storage)</li>
+        <li>DB upsert + 변경량 통계 생성</li>
+        <li>실패 시 재시도 및 운영자 알림</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>7. 협업 태그/면접 운영 데이터 모델</h2>
+      <h3>7.1 추천 태그(누가 달았는지 구분)</h3>
+      <table>
+        <thead><tr><th>테이블</th><th>목적</th><th>핵심 필드</th></tr></thead>
+        <tbody>
+          <tr><td><code>staff_profiles</code></td><td>페이지 사용자 식별</td><td>staff_id, nickname, display_name, is_active</td></tr>
+          <tr><td><code>candidate_tags</code></td><td>지원자 추천/태그</td><td>target_type(applicant/talent_pool), target_id, tag_type, tagged_by_staff_id, tagged_at</td></tr>
+          <tr><td><code>tag_audit_logs</code></td><td>태그 변경 이력</td><td>tag_id, action(add/remove), actor_staff_id, acted_at</td></tr>
+        </tbody>
+      </table>
+      <div class="note">초기 운영은 <code>nickname</code> 기준, 후속 마이그레이션으로 <code>display_name</code> 또는 실명 전환 지원.</div>
+
+      <h3>7.2 면접/결과 상태 모델</h3>
+      <table>
+        <thead><tr><th>구분</th><th>상태 코드</th><th>설명</th></tr></thead>
+        <tbody>
+          <tr><td>면접 일정</td><td><code>interview_scheduled</code></td><td>면접 일시/면접관 등록</td></tr>
+          <tr><td>면접 결과</td><td><code>interview_pass</code>, <code>interview_fail</code>, <code>interview_no_show</code></td><td>합격/불합/노쇼</td></tr>
+          <tr><td>최종 처리</td><td><code>hired</code>, <code>rejected</code>, <code>blocked</code></td><td>입사완료/탈락종결/블락종결</td></tr>
+        </tbody>
+      </table>
+      <div class="warn">제거는 물리 삭제 금지. <code>blocked</code> 또는 <code>is_active=false</code> 상태로 소프트 삭제 처리.</div>
+    </section>
+
+    <section>
+      <h2>8. 데이터 모델 추가 제안</h2>
+      <table>
+        <thead><tr><th>테이블</th><th>목적</th><th>핵심 필드</th></tr></thead>
+        <tbody>
+          <tr><td><code>platform_accounts</code></td><td>플랫폼 계정 설정</td><td>platform, account_alias, login_policy, is_active</td></tr>
+          <tr><td><code>platform_sessions</code></td><td>세션 상태 추적</td><td>platform, account_alias, session_version, expires_at, last_check_at</td></tr>
+          <tr><td><code>crawl_jobs</code></td><td>수집 작업 큐</td><td>job_type, status, requested_by, started_at, finished_at</td></tr>
+          <tr><td><code>crawl_failures</code></td><td>실패 원인 분석</td><td>job_id, platform, step, error_code, screenshot_url</td></tr>
+          <tr><td><code>talent_pool_candidates</code></td><td>인재검색 후보</td><td>platform, profile_url, sourced_at, proposal_status</td></tr>
+          <tr><td><code>interview_events</code></td><td>면접 일정 관리</td><td>candidate_id, interview_at, interviewer, meeting_type, note</td></tr>
+          <tr><td><code>candidate_status_history</code></td><td>상태 변경 이력</td><td>candidate_id, status_code, reason, changed_by_staff_id, changed_at</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>9. 보안 및 컴플라이언스</h2>
+      <ul>
+        <li>기업 계정 자격증명은 Secrets/Vault에서만 관리</li>
+        <li>민감 정보(이메일/전화번호/이력서)는 저장 시 암호화 또는 마스킹 정책 적용</li>
+        <li>접근 로그 및 상태 변경 로그 1년 이상 보관</li>
+        <li>플랫폼 이용약관 준수 범위 내 수집 정책 명문화</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>10. 단계별 구현 계획</h2>
+      <div class="cols">
+        <article>
+          <h3>Phase 1 (1~2주)</h3>
+          <ul>
+            <li>Actions 워크플로 골격 + Playwright 로그인 스크립트</li>
+            <li>DB 스키마(<code>crawl_jobs</code>, <code>platform_sessions</code>)</li>
+            <li>직원 닉네임 기반 추천 태그 MVP</li>
+          </ul>
+        </article>
+        <article>
+          <h3>Phase 2 (2주)</h3>
+          <ul>
+            <li>세션 재사용/만료 복구 로직</li>
+            <li>지원자/인재풀 분리 수집 파이프라인 완성</li>
+            <li>Pages 수집요청/상태조회 연결 + 18:00 자동 배치</li>
+          </ul>
+        </article>
+        <article>
+          <h3>Phase 3 (1~2주)</h3>
+          <ul>
+            <li>08:00 자동 리포트 및 실패 알림</li>
+            <li>면접 일정/결과/노쇼/입사완료/블락 상태 운영</li>
+            <li>Self-hosted Runner 이중화</li>
+          </ul>
+        </article>
+        <article>
+          <h3>Phase 4 (선택)</h3>
+          <ul>
+            <li>Queue Worker 독립 배포</li>
+            <li>플랫폼별 회복 시나리오 자동화 고도화</li>
+            <li>추가 채용 플랫폼 확장</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <h2>11. 최종 결론</h2>
+      <ul>
+        <li>GitHub Pages는 UI/요청만 담당, 로그인/수집은 Runner에서 수행</li>
+        <li>운영 핵심 시간축은 18:00 순차 수집, 08:00 요약 발송</li>
+        <li>추천 태그는 "누가 달았는지"를 staff_id(초기 닉네임)로 추적</li>
+        <li>후보 제거는 삭제가 아닌 상태 기반 소프트 삭제로 관리</li>
+        <li>핵심 난제는 로그인 안정성이며, 세션 재사용 + 수동 복구 절차가 필수</li>
+        <li>실무 운영 관점에서 Self-hosted Runner 기반이 가장 현실적</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>12. 운영 체크리스트</h2>
+      <h3>12.1 계정/로그인 운영</h3>
+      <ul>
+        <li>플랫폼별 운영 계정 만료일, 비밀번호 변경일, 2FA 백업코드 점검</li>
+        <li>세션 만료율(최근 7일) 임계치 초과 시 자동 경고</li>
+        <li>캡차/차단 발생 시 수동 복구 절차(runbook) 표준화</li>
+      </ul>
+
+      <h3>12.2 데이터 품질 운영</h3>
+      <ul>
+        <li>중복 후보 병합 규칙: 이메일 &gt; 전화번호 &gt; 프로필 URL 순 우선</li>
+        <li>상태 역전 방지 규칙: <code>hired</code>, <code>blocked</code> 상태는 승인자 없이 되돌림 금지</li>
+        <li>문서(PDF) 수집 실패율, 프로필 파싱 실패율 일일 리포트 포함</li>
+      </ul>
+
+      <h3>12.3 알림/메일 운영</h3>
+      <ul>
+        <li>메일 반송(bounce), 스팸 차단율 모니터링</li>
+        <li>08:00 요약 메일 미발송 시 08:10 재시도, 이후 운영자 경고</li>
+        <li>수신자 그룹 버전 관리(누가 언제 수신자 수정했는지 감사로그 기록)</li>
+      </ul>
+
+      <h3>12.4 보안/감사 운영</h3>
+      <ul>
+        <li>추천 태그/상태 변경/블락 처리 행위는 전부 actor 기준 로그 보관</li>
+        <li>민감정보 접근 로그 월간 검토</li>
+        <li>개인정보 보관 만료 레코드 자동 파기 배치 실행</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>13. 멀티 사이트 확장 아키텍처</h2>
+      <h3>13.1 커넥터(Plugin) 표준 인터페이스</h3>
+      <table>
+        <thead><tr><th>메서드</th><th>역할</th><th>반환 형식</th></tr></thead>
+        <tbody>
+          <tr><td><code>login(ctx)</code></td><td>사이트 로그인 및 세션 유효화</td><td>success/fail + reason</td></tr>
+          <tr><td><code>crawlApplicants(ctx)</code></td><td>공고 지원자 수집</td><td>raw applicant list</td></tr>
+          <tr><td><code>crawlTalentPool(ctx)</code></td><td>인재검색/포지션 제안 후보 수집</td><td>raw talent list</td></tr>
+          <tr><td><code>normalize(raw)</code></td><td>공통 스키마 변환</td><td>normalized records</td></tr>
+          <tr><td><code>healthCheck(ctx)</code></td><td>로그인/목록 진입 헬스체크</td><td>ok/warn/fail</td></tr>
+        </tbody>
+      </table>
+
+      <h3>13.2 디렉토리/모듈 구조 예시</h3>
+      <div class="diagram">/connectors
+  /jobkorea
+    login.ts
+    applicants.ts
+    talent-pool.ts
+  /saramin
+    login.ts
+    applicants.ts
+    talent-pool.ts
+  /new-site
+    login.ts
+    applicants.ts
+    talent-pool.ts
+/core
+  scheduler.ts
+  queue.ts
+  normalizer.ts
+  persistence.ts
+  notifier.ts</div>
+
+      <h3>13.3 사이트 증가 시 운영 규칙</h3>
+      <ul>
+        <li>사이트별 잡 격리: 한 사이트 실패가 전체 배치 중단시키지 않도록 분리 실행</li>
+        <li>사이트별 제한값: <code>rate_limit</code>, <code>timeout</code>, <code>retry_policy</code>를 설정 테이블로 관리</li>
+        <li>사이트 온보딩 체크리스트: 로그인 성공 &gt; 목록 수집 &gt; 상세 수집 &gt; 정규화 &gt; 헬스체크 통과</li>
+      </ul>
+
+      <h3>13.4 설정 기반 확장</h3>
+      <table>
+        <thead><tr><th>테이블</th><th>용도</th><th>핵심 필드</th></tr></thead>
+        <tbody>
+          <tr><td><code>platform_configs</code></td><td>사이트 실행 설정</td><td>platform, enabled, priority, crawl_window, rate_limit</td></tr>
+          <tr><td><code>platform_routes</code></td><td>사이트 경로 버전 관리</td><td>platform, route_name, selector_version, updated_at</td></tr>
+          <tr><td><code>platform_health</code></td><td>사이트 상태 모니터링</td><td>platform, last_ok_at, fail_count_24h, last_error</td></tr>
+        </tbody>
+      </table>
+      <div class="note">신규 사이트 추가 시 공통 파이프라인 변경 없이 connector 모듈 + platform_configs 등록만으로 온보딩 가능하도록 설계한다.</div>
+    </section>
+  </div>
+</body>
+</html>

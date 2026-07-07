@@ -1,0 +1,31 @@
+name: send-daily-mail
+
+# 매일 08:00 KST (전일 23:00 UTC) 요약 메일 발송
+on:
+  schedule:
+    - cron: "0 23 * * *"
+  workflow_dispatch:
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      PGSSL: "true"
+      SMTP_HOST: ${{ secrets.SMTP_HOST }}
+      SMTP_PORT: ${{ secrets.SMTP_PORT }}
+      SMTP_USER: ${{ secrets.SMTP_USER }}
+      SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+      MAIL_FROM: ${{ secrets.MAIL_FROM }}
+      DAILY_REPORT_RECIPIENTS: ${{ secrets.DAILY_REPORT_RECIPIENTS }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - name: DB migrate
+        run: npm run db:migrate
+      - name: Send daily mail
+        run: npm run mail:send

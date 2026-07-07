@@ -1,0 +1,26 @@
+name: compose-daily-report
+
+# 매일 07:50 KST (전일 22:50 UTC) 전일 데이터 집계 및 요약 메일 큐 등록
+on:
+  schedule:
+    - cron: "50 22 * * *"
+  workflow_dispatch:
+
+jobs:
+  compose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      PGSSL: "true"
+      DAILY_REPORT_RECIPIENTS: ${{ secrets.DAILY_REPORT_RECIPIENTS }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - name: DB migrate
+        run: npm run db:migrate
+      - name: Compose daily report
+        run: npm run report:compose

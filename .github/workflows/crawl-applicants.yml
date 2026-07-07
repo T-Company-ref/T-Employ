@@ -1,0 +1,52 @@
+name: crawl-applicants
+
+# 매일 18:00 KST (09:00 UTC) 공고 지원자 수집
+on:
+  schedule:
+    - cron: "0 9 * * *"
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: "특정 플랫폼만 실행 (비우면 전체)"
+        required: false
+        default: ""
+
+concurrency:
+  group: crawl-applicants
+  cancel-in-progress: false
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      PGSSL: "true"
+      SESSION_ENC_KEY: ${{ secrets.SESSION_ENC_KEY }}
+      JOBKOREA_USERNAME: ${{ secrets.JOBKOREA_USERNAME }}
+      JOBKOREA_PASSWORD: ${{ secrets.JOBKOREA_PASSWORD }}
+      JOBKOREA_TOTP_SECRET: ${{ secrets.JOBKOREA_TOTP_SECRET }}
+      SARAMIN_USERNAME: ${{ secrets.SARAMIN_USERNAME }}
+      SARAMIN_PASSWORD: ${{ secrets.SARAMIN_PASSWORD }}
+      SARAMIN_TOTP_SECRET: ${{ secrets.SARAMIN_TOTP_SECRET }}
+      HEADLESS: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: DB migrate
+        run: npm run db:migrate
+      - name: Crawl applicants
+        run: npm run crawl:applicants -- "${{ github.event.inputs.platform }}"
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: applicants-artifacts
+          path: |
+            screenshots/
+          if-no-files-found: ignore
+          retention-days: 14

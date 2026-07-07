@@ -1,0 +1,33 @@
+name: refresh-session
+
+# 세션 재발급 전용 (수동 실행 / 로그인 실패 시 복구)
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: "세션 재발급 대상 플랫폼"
+        required: true
+        default: "jobkorea"
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      PGSSL: "true"
+      SESSION_ENC_KEY: ${{ secrets.SESSION_ENC_KEY }}
+      JOBKOREA_USERNAME: ${{ secrets.JOBKOREA_USERNAME }}
+      JOBKOREA_PASSWORD: ${{ secrets.JOBKOREA_PASSWORD }}
+      SARAMIN_USERNAME: ${{ secrets.SARAMIN_USERNAME }}
+      SARAMIN_PASSWORD: ${{ secrets.SARAMIN_PASSWORD }}
+      HEADLESS: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Route check (dry-run)
+        run: npm run dev:check

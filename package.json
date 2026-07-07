@@ -1,0 +1,42 @@
+{
+  "name": "t-employ",
+  "version": "0.1.0",
+  "description": "TBELL Employ - 채용 지원자/인재검색 통합 수집 및 관리 시스템",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "db:migrate": "tsx src/db/migrate.ts up",
+    "db:status": "tsx src/db/migrate.ts status",
+    "db:seed": "tsx src/db/seed.ts",
+    "crawl:applicants": "tsx src/jobs/crawlApplicants.ts",
+    "crawl:talent": "tsx src/jobs/crawlTalentPool.ts",
+    "report:compose": "tsx src/jobs/composeDailyReport.ts",
+    "mail:send": "tsx src/jobs/sendDailyMail.ts",
+    "dev:check": "tsx src/tools/routeCheck.ts"
+  },
+  "keywords": [
+    "recruiting",
+    "crawler",
+    "playwright",
+    "postgres"
+  ],
+  "license": "UNLICENSED",
+  "dependencies": {
+    "nodemailer": "^9.0.3",
+    "pg": "^8.22.0",
+    "playwright": "^1.61.1",
+    "yaml": "^2.9.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.0",
+    "@types/nodemailer": "^8.0.1",
+    "@types/pg": "^8.20.0",
+    "tsx": "^4.23.0",
+    "typescript": "^6.0.3"
+  }
+}

@@ -1,0 +1,57 @@
+# 사람인 Route Map / Selector Registry
+# UI 변경 시 코드가 아닌 이 파일만 수정한다.
+
+platform: saramin
+version: "2026-07-07"
+
+login:
+  url: "https://www.saramin.co.kr/zf_user/auth"
+  success_selector: "success_marker"
+  fields:
+    username: "login_id"
+    password: "login_pw"
+  submit: "login_submit"
+  session_expired_selector: "login_id"
+
+routes:
+  home:
+    url: "https://www.saramin.co.kr/zf_user/"
+    ready_selector: "home_nav"
+
+  applicants_list:
+    path_from_home:
+      - action: click
+        target: "nav_recruit"
+      - action: click
+        target: "menu_applicants"
+    ready_selector: "applicant_table"
+    pagination:
+      strategy: "click_next"
+      next_selector: "applicant_next_page"
+
+  talent_pool_list:
+    # 사람인 인재풀 진입
+    path_from_home:
+      - action: click
+        target: "nav_talent"
+      - action: click
+        target: "menu_talent_pool"
+    ready_selector: "talent_card"
+    pagination:
+      strategy: "click_next"
+      next_selector: "talent_next_page"
+
+selectors:
+  success_marker: "TODO: 로그인 성공 후 노출 요소"
+  login_id: "#id"
+  login_pw: "#password"
+  login_submit: "button.btn_login"
+  home_nav: "TODO"
+  nav_recruit: "TODO"
+  menu_applicants: "TODO"
+  applicant_table: "TODO"
+  applicant_next_page: "TODO"
+  nav_talent: "TODO"
+  menu_talent_pool: "TODO"
+  talent_card: "TODO"
+  talent_next_page: "TODO"
