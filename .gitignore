@@ -18,6 +18,9 @@ artifacts/
 screenshots/
 *.log
 
+# 임베디드 DB 런타임 산출물 (CI 지속성은 db-snapshot 브랜치로 관리)
+data/
+
 # OS
 .DS_Store
 Thumbs.db

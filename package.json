@@ -13,6 +13,9 @@
     "db:migrate": "tsx src/db/migrate.ts up",
     "db:status": "tsx src/db/migrate.ts status",
     "db:seed": "tsx src/db/seed.ts",
+    "db:dump": "tsx src/db/persist.ts dump",
+    "db:restore": "tsx src/db/persist.ts restore",
+    "db:supabase": "tsx src/db/applySupabase.ts",
     "crawl:applicants": "tsx src/jobs/crawlApplicants.ts",
     "crawl:talent": "tsx src/jobs/crawlTalentPool.ts",
     "report:compose": "tsx src/jobs/composeDailyReport.ts",
@@ -27,6 +30,7 @@
   ],
   "license": "UNLICENSED",
   "dependencies": {
+    "@electric-sql/pglite": "^0.5.4",
     "nodemailer": "^9.0.3",
     "pg": "^8.22.0",
     "playwright": "^1.61.1",

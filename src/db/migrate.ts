@@ -1,13 +1,13 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { getPool, closePool } from './client.js';
+import { query, execScript, closePool } from './client.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS_DIR = resolve(__dirname, '../../db/migrations');
 
 async function ensureMigrationsTable(): Promise<void> {
-  await getPool().query(`
+  await query(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
       id          text PRIMARY KEY,
       applied_at  timestamptz NOT NULL DEFAULT now()
@@ -22,7 +22,7 @@ function listMigrationFiles(): string[] {
 }
 
 async function appliedIds(): Promise<Set<string>> {
-  const res = await getPool().query<{ id: string }>('SELECT id FROM schema_migrations');
+  const res = await query<{ id: string }>('SELECT id FROM schema_migrations');
   return new Set(res.rows.map((r) => r.id));
 }
 
@@ -39,19 +39,14 @@ async function up(): Promise<void> {
 
   for (const file of pending) {
     const sql = readFileSync(resolve(MIGRATIONS_DIR, file), 'utf8');
-    const client = await getPool().connect();
+    // 스키마 변경 + 적용 기록을 하나의 트랜잭션으로 묶는다.
+    const script = `${sql}\nINSERT INTO schema_migrations (id) VALUES ('${file}');`;
     try {
-      await client.query('BEGIN');
-      await client.query(sql);
-      await client.query('INSERT INTO schema_migrations (id) VALUES ($1)', [file]);
-      await client.query('COMMIT');
+      await execScript(script);
       console.log(`[migrate] 적용 완료: ${file}`);
     } catch (err) {
-      await client.query('ROLLBACK');
       console.error(`[migrate] 실패: ${file}`);
       throw err;
-    } finally {
-      client.release();
     }
   }
 }

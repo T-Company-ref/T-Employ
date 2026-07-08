@@ -12,8 +12,11 @@ on:
         default: ""
 
 concurrency:
-  group: crawl-talent-pool
+  group: db-write
   cancel-in-progress: false
+
+permissions:
+  contents: write
 
 jobs:
   crawl:
@@ -21,7 +24,8 @@ jobs:
     timeout-minutes: 60
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      PGSSL: "true"
+      PGSSL: ${{ secrets.DATABASE_URL != '' && 'true' || 'false' }}
+      GITHUB_TOKEN: ${{ github.token }}
       SESSION_ENC_KEY: ${{ secrets.SESSION_ENC_KEY }}
       JOBKOREA_USERNAME: ${{ secrets.JOBKOREA_USERNAME }}
       JOBKOREA_PASSWORD: ${{ secrets.JOBKOREA_PASSWORD }}
@@ -35,12 +39,20 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
       - run: npm ci
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
       - run: npx playwright install --with-deps chromium
-      - name: DB migrate
-        run: npm run db:migrate
+      - name: Load DB (restore + migrate)
+        uses: ./.github/actions/db-load
       - name: Crawl talent pool
         run: npm run crawl:talent -- "${{ github.event.inputs.platform }}"
+      - name: Save DB snapshot
+        uses: ./.github/actions/db-save
       - name: Upload artifacts
         if: always()
         uses: actions/upload-artifact@v4

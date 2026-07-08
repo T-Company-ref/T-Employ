@@ -1,7 +1,6 @@
 -- 0001_init.sql
--- 확장, 공통 트리거, 직원(사용자) 프로필
-
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
+-- 공통 트리거, 직원(사용자) 프로필
+-- gen_random_uuid() 는 PostgreSQL 13+ 및 PGlite 코어에 내장되어 별도 확장 불필요.
 
 -- updated_at 자동 갱신 트리거 함수
 CREATE OR REPLACE FUNCTION set_updated_at()

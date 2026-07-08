@@ -1,0 +1,42 @@
+name: db-setup-supabase
+
+# Supabase 스키마 + RLS/auth 정책 적용 (버튼 실행)
+# 사전조건: DATABASE_URL(Session pooler), PGSSL, (선택) 시드용 Secrets 등록
+on:
+  workflow_dispatch:
+    inputs:
+      seed:
+        description: "초기 시드(platform_configs/staff_profiles 등) 적용 여부"
+        type: boolean
+        required: false
+        default: true
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      PGSSL: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Guard - DATABASE_URL 필수
+        run: |
+          if [[ "${DATABASE_URL:-}" != postgres* ]]; then
+            echo "::error::DATABASE_URL 이 postgres:// 접속 문자열이 아닙니다. Supabase Session pooler URL 을 등록하세요."
+            exit 1
+          fi
+      - name: Migrate (공통 스키마)
+        run: npm run db:migrate
+      - name: Seed (선택)
+        if: ${{ inputs.seed }}
+        run: npm run db:seed
+      - name: Apply Supabase RLS/auth
+        run: npm run db:supabase
+      - name: Status
+        run: npm run db:status

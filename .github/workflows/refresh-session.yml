@@ -9,13 +9,21 @@ on:
         required: true
         default: "jobkorea"
 
+concurrency:
+  group: db-write
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
 jobs:
   refresh:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      PGSSL: "true"
+      PGSSL: ${{ secrets.DATABASE_URL != '' && 'true' || 'false' }}
+      GITHUB_TOKEN: ${{ github.token }}
       SESSION_ENC_KEY: ${{ secrets.SESSION_ENC_KEY }}
       JOBKOREA_USERNAME: ${{ secrets.JOBKOREA_USERNAME }}
       JOBKOREA_PASSWORD: ${{ secrets.JOBKOREA_PASSWORD }}
@@ -27,7 +35,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
       - run: npm ci
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
       - run: npx playwright install --with-deps chromium
+      - name: Load DB (restore + migrate)
+        uses: ./.github/actions/db-load
       - name: Route check (dry-run)
         run: npm run dev:check
+      - name: Save DB snapshot
+        uses: ./.github/actions/db-save

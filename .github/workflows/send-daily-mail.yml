@@ -6,13 +6,21 @@ on:
     - cron: "0 23 * * *"
   workflow_dispatch:
 
+concurrency:
+  group: db-write
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
 jobs:
   send:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      PGSSL: "true"
+      PGSSL: ${{ secrets.DATABASE_URL != '' && 'true' || 'false' }}
+      GITHUB_TOKEN: ${{ github.token }}
       SMTP_HOST: ${{ secrets.SMTP_HOST }}
       SMTP_PORT: ${{ secrets.SMTP_PORT }}
       SMTP_USER: ${{ secrets.SMTP_USER }}
@@ -24,8 +32,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
       - run: npm ci
-      - name: DB migrate
-        run: npm run db:migrate
+      - name: Load DB (restore + migrate)
+        uses: ./.github/actions/db-load
       - name: Send daily mail
         run: npm run mail:send
+      - name: Save DB snapshot
+        uses: ./.github/actions/db-save

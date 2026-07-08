@@ -15,8 +15,11 @@
 ### DB
 | 키 | 설명 |
 |----|------|
-| `DATABASE_URL` | Postgres 연결 문자열 (Supabase/RDS/로컬) |
-| `PGSSL` | 클라우드 DB 사용 시 `true` |
+| `DATABASE_URL` | (선택) 호스티드 Postgres 연결 문자열. **비우면 임베디드 PGlite 사용** (계정/Docker 불필요) |
+| `PGSSL` | 호스티드 DB 사용 시 `true` |
+| `PGLITE_DIR` | 임베디드 DB 파일 위치 (기본 `data/pgdata`) |
+
+CI 지속성: 임베디드 모드에서는 GitHub Actions 가 `db-snapshot` 브랜치에 스냅샷을 유지한다(`.github/actions/db-load`·`db-save`). 별도 Secret 불필요(기본 `GITHUB_TOKEN` 사용).
 
 ### 세션
 | 키 | 설명 |
@@ -52,7 +55,7 @@
 
 | 파일 | 내용 |
 |------|------|
-| `0001_init.sql` | 확장, 트리거 함수, staff_profiles |
+| `0001_init.sql` | 트리거 함수, staff_profiles (gen_random_uuid 코어 내장) |
 | `0002_platform.sql` | platform_accounts/sessions/configs/routes/health |
 | `0003_recruiting.sql` | job_postings, posting_snapshots, candidates, applications, candidate_documents, talent_pool_candidates |
 | `0004_collaboration.sql` | candidate_tags, tag_audit_logs, candidate_status_history, interview_events, mail_jobs |
@@ -63,6 +66,7 @@
 - [x] 운영 계정/Secrets 목록 정의
 - [x] 잡코리아/사람인 Route Map 초안 작성
 - [x] 공통 DB 스키마 초안 확정 (마이그레이션 5종)
+- [x] 임베디드 DB(PGlite) `migrate`/`seed`/`dump`/`restore` 로컬 검증 (Docker·계정 불필요)
 - [ ] 실제 로그인 후 인재검색 화면까지 셀렉터 확정 (`npm run dev:check` 통과)
 - [ ] 공고지원/인재검색 각각 최소 1건 저장 성공
 

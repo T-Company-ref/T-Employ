@@ -28,12 +28,6 @@ function loadDotEnv(): void {
 
 loadDotEnv();
 
-function required(key: string): string {
-  const value = process.env[key];
-  if (!value) throw new Error(`환경변수 ${key} 가 설정되지 않았습니다.`);
-  return value;
-}
-
 function optional(key: string, fallback = ''): string {
   return process.env[key] ?? fallback;
 }
@@ -44,10 +38,18 @@ function bool(key: string, fallback = false): boolean {
   return value === 'true' || value === '1';
 }
 
+export type DbDriver = 'pg' | 'pglite';
+
 export const env = {
-  databaseUrl: () => required('DATABASE_URL'),
+  /** DATABASE_URL 이 postgres:// 로 시작하면 hosted pg, 아니면 임베디드 pglite */
+  dbDriver: (): DbDriver => {
+    const url = process.env.DATABASE_URL ?? '';
+    return url.startsWith('postgres://') || url.startsWith('postgresql://') ? 'pg' : 'pglite';
+  },
+  databaseUrl: () => optional('DATABASE_URL'),
   pgSsl: () => bool('PGSSL', false),
-  sessionEncKey: () => optional('SESSION_ENC_KEY'),
+  /** PGlite 데이터 디렉토리 (파일 지속) */
+  dataDir: () => optional('PGLITE_DIR', 'data/pgdata'),
   headless: () => bool('HEADLESS', true),
   captureScreenshots: () => bool('CAPTURE_SCREENSHOTS', true),
   platformCreds: (platform: string) => ({

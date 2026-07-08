@@ -1,0 +1,22 @@
+name: "DB load"
+description: "임베디드(PGlite) 스냅샷을 db-snapshot 브랜치에서 복원하고 마이그레이션 실행 (hosted Postgres 면 복원 스킵)"
+runs:
+  using: "composite"
+  steps:
+    - name: Fetch & restore snapshot
+      shell: bash
+      run: |
+        if [[ "${DATABASE_URL:-}" == postgres* ]]; then
+          echo "[db-load] hosted Postgres 모드 — 스냅샷 복원 스킵"
+        else
+          git fetch origin db-snapshot:db-snapshot --depth=1 2>/dev/null || echo "[db-load] db-snapshot 브랜치 없음 — 신규 DB 시작"
+          mkdir -p data
+          if git cat-file -e db-snapshot:pgdata.tar.gz 2>/dev/null; then
+            git show db-snapshot:pgdata.tar.gz > data/pgdata.tar.gz
+            echo "[db-load] 스냅샷 파일 확보"
+          fi
+          npm run db:restore
+        fi
+    - name: Migrate
+      shell: bash
+      run: npm run db:migrate

@@ -1,0 +1,28 @@
+name: "DB save"
+description: "임베디드(PGlite) 스냅샷을 덤프해 db-snapshot 브랜치로 강제 푸시 (단일 커밋 유지, hosted Postgres 면 스킵)"
+runs:
+  using: "composite"
+  steps:
+    - name: Dump & push snapshot
+      shell: bash
+      run: |
+        if [[ "${DATABASE_URL:-}" == postgres* ]]; then
+          echo "[db-save] hosted Postgres 모드 — 스냅샷 저장 스킵"
+          exit 0
+        fi
+        npm run db:dump
+        if [[ ! -f data/pgdata.tar.gz ]]; then
+          echo "[db-save] 스냅샷 파일이 없어 저장 중단"
+          exit 1
+        fi
+        tmp="$(mktemp -d)"
+        cp data/pgdata.tar.gz "$tmp/pgdata.tar.gz"
+        cd "$tmp"
+        git init -q
+        git config user.name "t-employ-bot"
+        git config user.email "t-employ-bot@users.noreply.github.com"
+        git checkout -q -b db-snapshot
+        git add pgdata.tar.gz
+        git commit -q -m "db snapshot $(date -u +%FT%TZ)"
+        git push -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" db-snapshot
+        echo "[db-save] db-snapshot 브랜치로 스냅샷 강제 푸시 완료"
