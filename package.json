@@ -18,9 +18,20 @@
     "db:supabase": "tsx src/db/applySupabase.ts",
     "crawl:applicants": "tsx src/jobs/crawlApplicants.ts",
     "crawl:talent": "tsx src/jobs/crawlTalentPool.ts",
+    "session:refresh": "tsx src/jobs/refreshSession.ts",
     "report:compose": "tsx src/jobs/composeDailyReport.ts",
     "mail:send": "tsx src/jobs/sendDailyMail.ts",
-    "dev:check": "tsx src/tools/routeCheck.ts"
+    "dev:check": "tsx src/tools/routeCheck.ts",
+    "dev:login": "tsx src/tools/loginCheck.ts",
+    "dev:session": "tsx src/tools/loginCheck.ts --wait-2fa",
+    "dev:crawl-stats": "tsx src/tools/crawlStats.ts",
+    "dev:verify-merge": "tsx src/tools/verifyMerge.ts",
+    "dev:collab-check": "tsx src/tools/collabVerify.ts",
+    "dev:mail-test": "tsx src/tools/mailTest.ts",
+    "collab": "tsx src/tools/collabCli.ts",
+    "notify:action": "tsx src/jobs/notifyActionResult.ts",
+    "web:serve": "npx --yes serve web -p 5173",
+    "web:config": "tsx src/tools/writeWebConfig.ts"
   },
   "keywords": [
     "recruiting",

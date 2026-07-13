@@ -1,62 +1,80 @@
 # 잡코리아 Route Map / Selector Registry
 # UI 변경 시 코드가 아닌 이 파일만 수정한다.
-# selector 키는 selectors 블록에서 정의하고 routes 에서 참조한다.
 
 platform: jobkorea
-version: "2026-07-07"
+version: "2026-07-13"
 
 login:
   url: "https://www.jobkorea.co.kr/Login/"
-  # 로그인 성공 판정용 셀렉터 (로그인 후 노출되는 요소)
   success_selector: "success_marker"
   fields:
     username: "login_id"
     password: "login_pw"
   submit: "login_submit"
-  # 로그인 페이지로 리다이렉트되면 세션 만료로 판단
   session_expired_selector: "login_id"
+  pre_steps:
+    - action: click
+      target: "corp_login_tab"
+    - action: wait
+      value: "600"
 
 routes:
   home:
-    url: "https://www.jobkorea.co.kr/"
-    ready_selector: "home_nav"
+    url: "https://www.jobkorea.co.kr/Corp/Main"
+    ready_selector: "success_marker"
+
+  postings_list:
+    url: "https://www.jobkorea.co.kr/Corp/GIMng/List?PubType=1"
+    ready_selector: "posting_item"
+    pagination:
+      strategy: "none"
 
   applicants_list:
-    # home 에서의 이동 단계 (지원자 관리 진입)
-    path_from_home:
-      - action: click
-        target: "nav_recruit"
-      - action: click
-        target: "menu_applicants"
-    ready_selector: "applicant_table"
+    url: "https://www.jobkorea.co.kr/Corp/Applicant/List"
+    ready_selector: "applicant_row"
     pagination:
-      strategy: "click_next"
-      next_selector: "applicant_next_page"
+      strategy: "none"
 
   talent_pool_list:
-    # 인재검색 / 포지션 제안 진입
-    path_from_home:
-      - action: click
-        target: "nav_talent"
-      - action: click
-        target: "menu_talent_search"
-    ready_selector: "talent_card"
+    url: "https://www.jobkorea.co.kr/corp/person/find"
+    ready_selector: "talent_row"
     pagination:
-      strategy: "click_next"
-      next_selector: "talent_next_page"
+      strategy: "none"
 
-# 실제 셀렉터는 사이트 확인 후 채운다 (Phase 0 dry-run 시 확정).
 selectors:
-  success_marker: "TODO: 로그인 성공 후 노출 요소"
+  corp_login_tab: '#devMemTab a[data-m-type="Co"]'
+  success_marker: "a[href='/Login/Logout.asp']"
   login_id: "#M_ID"
   login_pw: "#M_PWD"
-  login_submit: "button[type=submit]"
-  home_nav: "TODO"
-  nav_recruit: "TODO"
-  menu_applicants: "TODO"
-  applicant_table: "TODO"
-  applicant_next_page: "TODO"
-  nav_talent: "TODO"
-  menu_talent_search: "TODO"
-  talent_card: "TODO"
-  talent_next_page: "TODO"
+  login_submit: "button.login-button"
+  # 공고 관리 (전체 채용공고 > 진행중)
+  posting_item: ".giListItem"
+  posting_title_link: "a.tit.devLinkExpire"
+  posting_status: "em.used, .used"
+  posting_row: ".giListItem"
+  posting_paging: ".tplPagination.newVer"
+  posting_next_page: ".tplPagination.newVer a[data-page-no]"
+  # 지원자 목록 v2
+  applicant_row: "tr[data-pssno]"
+  applicant_name: ".applicant-box .name"
+  applicant_date: "td .date"
+  applicant_position_link: "a.devTypeAplctHref"
+  applicant_keyword: ".keyword-list li"
+  applicant_paging: "#dev_viewpageing"
+  applicant_next_page: "#dev_viewpageing a[data-page-no]"
+  applicant_gi_no: "#GI_No"
+  applicant_ready: "tr[data-pssno]"
+  # 인재검색 목록
+  talent_row: "#dvResumeList tr.dvResumeTr[data-rno]"
+  talent_name: ".nameAge dt"
+  talent_headline: ".tdSummary .title strong"
+  talent_link: "a.dvResumeLink"
+  talent_paging: ".pagenation.js-GICndtPaging"
+  talent_ready: "#dvResumeList tr.dvResumeTr"
+  talent_next_page: ".pagenation.js-GICndtPaging a[data-page-no]"
+  # 이력서 인쇄
+  talent_print_btn: 'button.devPrint, a.devPrint, a.print-icon, button:has-text("인쇄")'
+  applicant_print_btn: 'a.print-icon, button.print-icon, .print-icon, button:has-text("인쇄"), a:has-text("인쇄하기")'
+  resume_print_agree: '#devAgreeChk, input[type="checkbox"][name*="agree"], .agree-check input, label:has-text("동의") input'
+  resume_print_confirm: 'button.devConfirm, button:has-text("확인"), button:has-text("동의")'
+  resume_print_area: '#devPrintArea, #printArea, .resumePrint, .printArea, .devResumePrint'

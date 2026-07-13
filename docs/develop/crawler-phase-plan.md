@@ -1,40 +1,63 @@
 # TBELL Employ Crawler Phase Plan
 
+## 현재 플랫폼 진행 상태 (2026-07-10)
+
+| 플랫폼 | 상태 | 비고 |
+|--------|------|------|
+| **잡코리아** | Phase 1 완료 | 지원자 20건·인재검색 20건 DB 저장 완료 |
+| **사람인** | 인증 대기 | 기업회원 로그인까지 성공. 이력서/인재풀 열람 시 2단계 인증(SMS/이메일) 필요 — 사용자 1회 인증 후 재개 |
+
+> **현재**: Phase 2·3 기능 구현 완료. **시간별 cron(18:00/07:50/08:00)은 비활성** — Actions는 수동 실행, **실행 결과 메일은 항상 `yj.kim@tbell.co.kr` 로 발송**.
+
+---
+
 ## Phase 진행 체크리스트
 
-- [~] Phase 0 진행 (사전준비)
-  - [x] 운영 계정/권한/Secrets 목록 정의 (`docs/develop/phase0-setup.md`)
-  - [x] 잡코리아 Route Map 초안 작성 (`config/routes/jobkorea.yaml`)
-  - [x] 사람인 Route Map 초안 작성 (`config/routes/saramin.yaml`)
-  - [x] 공통 DB 스키마 초안 확정 (`db/migrations/0001~0005`)
-  - [x] 임베디드 DB(PGlite) 어댑터 + 마이그레이션/시드 로컬 검증 완료 (Docker 불필요)
-  - [x] DB 스냅샷 덤프/복원 스크립트 검증 (`db:dump`/`db:restore`)
-  - [ ] 실제 로그인 후 셀렉터 확정 (`npm run dev:check` 통과)
-  - [ ] 공고지원/인재검색 각 1건 저장 성공
-- [ ] Phase 1 완료 (수동 실행 MVP)
-  - [ ] `crawl-applicants.yml` 수동 실행 성공
-  - [ ] `crawl-talent-pool.yml` 수동 실행 성공
-  - [ ] 잡코리아 지원자 20건 샘플 저장
-  - [ ] 사람인 인재검색 20건 샘플 저장
-  - [ ] 실패 로그/스크린샷 저장 확인
-- [ ] Phase 2 완료 (자동 배치 + 안정화)
-  - [ ] 18:00 applicants 배치 동작
-  - [ ] 18:20 talent-pool 배치 동작
-  - [ ] 세션 재사용/만료복구 동작
-  - [ ] 중복 병합 규칙 검증
-  - [ ] 7일 성공률 90% 이상
-- [ ] Phase 3 완료 (협업 기능 + 리포트)
-  - [ ] 추천 태그 + 작성자 추적 동작
-  - [ ] 면접 일정/결과/노쇼 상태 동작
-  - [ ] 07:50 집계 잡 동작
-  - [ ] 08:00 메일 발송 동작
-  - [ ] 발송 실패 재시도/경고 동작
-- [ ] Phase 3.5 완료 (인터랙티브 웹 UI · Supabase)
-  - [ ] Supabase 프로젝트 준비 + Secrets 등록 (사용자 5분 작업)
-  - [ ] RLS 정책 + auth→staff_profiles 매핑 적용
-  - [ ] 기업 이메일 로그인 동작
-  - [ ] 웹에서 태그/면접/삭제상태 입력·수정 실시간 반영
-  - [ ] 크롤러 DATABASE_URL → Supabase 전환 후 동일 데이터 공유 확인
+- [x] Phase 0 완료 (사전준비)
+  - **공통 인프라**
+    - [x] 운영 계정/권한/Secrets 목록 정의 (`docs/develop/phase0-setup.md`)
+    - [x] 공통 DB 스키마 초안 확정 (`db/migrations/0001~0005`)
+    - [x] 임베디드 DB(PGlite) 어댑터 + 마이그레이션/시드 로컬 검증 완료 (Docker 불필요)
+    - [x] DB 스냅샷 덤프/복원 스크립트 검증 (`db:dump`/`db:restore`)
+    - [x] Supabase 인프라(스키마/시드/RLS) 연결 및 종단 검증 (2026-07-08) — 웹 UI는 Phase 3.5에서 진행
+    - [x] 로그인/라우트 스모크 테스트 도구 (`npm run dev:login` / `dev:session` / `--dump-only`)
+  - **잡코리아 (Phase 1 완료)**
+    - [x] Route Map 작성·셀렉터 확정 (`config/routes/jobkorea.yaml`)
+    - [x] 기업회원 로그인 실검증 — 기업회원 탭 전환 후 `/Corp/Main` 진입
+    - [x] 지원자관리·인재검색 직접 URL 확정
+    - [x] 목록 파싱·DB 저장 — 지원자 20건 / 인재검색 20건 (2026-07-10)
+  - **사람인 (인증 대기)**
+    - [x] Route Map 초안 작성 (`config/routes/saramin.yaml`)
+    - [x] 기업회원 로그인까지 성공 — 기업회원 탭(`.btn_tab.t_com`) → 채용센터 `hiring.saramin.co.kr/home`
+    - [x] 지원자관리·인재풀 URL 확정 (수집 전 단계까지)
+    - [ ] **2단계 인증 완료 후 세션 저장** — `npm run dev:session -- saramin` (사용자 1회, 인증 6개월 유효)
+    - [ ] 인증 완료 후 목록/상세 셀렉터 확정 및 1건 저장 (Phase 1 후반)
+- [x] Phase 1 완료 (수동 실행 MVP) — **잡코리아**
+  - [x] `npm run crawl:applicants jobkorea` 수동 실행 성공 (20건)
+  - [x] `npm run crawl:talent jobkorea` 수동 실행 성공 (20건)
+  - [x] 잡코리아 지원자 20건 샘플 저장
+  - [x] 잡코리아 인재검색 20건 샘플 저장
+  - [x] 실패 로그/스크린샷 저장 확인 (runner `recordFailure`)
+  - [ ] (사람인) 2단계 인증 완료 후 동일 항목 재개
+- [x] Phase 2 완료 (자동 배치 + 안정화) — **잡코리아** (기능 구현, **cron 비활성** — 수동 실행)
+  - [x] 재시도/crawl_window/세션 스냅샷 구현
+  - [x] 중복 병합 규칙 검증 (`npm run dev:verify-merge`)
+  - [ ] 7일 성공률 90% — cron 미가동 시 해당 없음
+- [x] Phase 3 완료 (협업 기능 + 리포트) — **cron 제외, 기능·수동 실행**
+  - [x] 추천 태그 + 작성자 추적 (`collab tag`, `tag_audit_logs`)
+  - [x] 면접 일정/결과/노쇼 상태 (`collab interview`)
+  - [x] 상태 이력·소프트 블락 (`collab status` / `block`)
+  - [x] 요약 집계 잡 (`report:compose`, `compose-daily-report` workflow)
+  - [x] 요약 메일 발송 (`mail:send`, 3회 재시도 + 실패 경고)
+  - [x] **모든 Actions 결과 메일** → `yj.kim@tbell.co.kr` (`notify:action`)
+  - [ ] 07:50 / 08:00 **cron** — 사용자 요청으로 비활성 (수동 workflow_dispatch)
+- [x] Phase 3.5 완료 (인터랙티브 웹 UI · Supabase)
+  - [x] Supabase **인프라** 준비 — 스키마/RLS/auth 매핑
+  - [x] 프론트엔드(`web/`) + Supabase Auth 로그인
+  - [x] 웹에서 태그/면접/삭제상태 입력·수정 (`docs/develop/web-ui.md`)
+  - [x] GitHub Pages 배포 워크플로 (`deploy-web.yml`)
+  - [ ] 사용자: Secrets `SUPABASE_URL`/`SUPABASE_ANON_KEY` + Pages 활성화 + Auth 유저 생성
+  - [ ] 사용자: `db-setup-supabase` 재실행(0002 정책 포함) 후 Pages 배포
 - [ ] Phase 4 완료 (멀티 사이트 확장)
   - [ ] connector 인터페이스 표준 적용
   - [ ] `platform_configs` 기반 on/off 운영
@@ -83,9 +106,9 @@
 ### CI 데이터 지속성 메커니즘
 GitHub Actions 러너는 매 실행마다 초기화되므로, 임베디드 DB는 다음 순서로 상태를 유지한다.
 
-1. `db-load` 액션: `db-snapshot` 브랜치에서 `pgdata.tar.gz` 복원 → `db:migrate`
+1. `db-load` 액션: `db-snapshot` 브랜치에서 `pgdata.tar.gz` + `sessions-bundle.json` 복원 → `db:migrate`
 2. 잡 실행(크롤/집계/메일)
-3. `db-save` 액션: `db:dump` → `db-snapshot` 브랜치로 **강제 푸시(단일 커밋 유지)**
+3. `db-save` 액션: `db:dump` (DB + `.sessions/` 번들) → `db-snapshot` 브랜치로 **강제 푸시(단일 커밋 유지)**
 
 `db-snapshot` 브랜치는 항상 1개 커밋만 유지하도록 force-push 하므로 저장소 히스토리가 누적 팽창하지 않는다. 모든 DB 쓰기 워크플로는 `concurrency: db-write` 그룹으로 직렬화되어 스냅샷 충돌을 방지한다.
 
@@ -147,8 +170,14 @@ GitHub Pages는 정적 호스팅이라 브라우저에서 임베디드 DB로 직
   - 크롤러(서비스 롤): RLS 우회하여 수집 데이터 적재
 - Supabase 전용 SQL(RLS/트리거)은 `db/supabase/` 에 분리 보관하여 PGlite 마이그레이션 체인과 격리한다.
 
-### 사용자 1회 준비(약 5분, 대체 불가)
-계정 생성/키 발급은 소유 계정에서만 가능하다. 절차는 `docs/develop/supabase-setup.md` 참고. 이후 스키마·RLS·연동·배포는 전담 처리한다.
+### Supabase 인프라 준비 현황 (Phase 0, UI 미착수)
+- Supabase 프로젝트 연결 완료 (ref `koxsezeotvylkeqeixnb`, region `ap-south-1`).
+- 접속은 **Session pooler(IPv4)** 사용: `aws-1-ap-south-1.pooler.supabase.com:5432`, user `postgres.<ref>`.
+  - 직접연결(`db.<ref>.supabase.co`)은 IPv6 전용이라 로컬/GitHub Actions(IPv4)에서 사용 불가 → pooler 필수.
+- 스키마(21종) + 시드 + RLS/auth 매핑 반영 및 읽기/쓰기 종단 검증 완료.
+- 상세: `docs/develop/supabase-setup.md`.
+- **프론트엔드·Auth 로그인 UI는 Phase 3.5에서 진행** (현재는 DB/RLS 인프라만 완료).
+- 남은 사용자 작업: GitHub Secret `DATABASE_URL` 을 위 pooler 문자열로 갱신(Actions 실행용).
 
 ---
 
@@ -167,12 +196,19 @@ GitHub Pages는 정적 호스팅이라 브라우저에서 임베디드 DB로 직
 - 사이트별 "로그인 후 이동 경로" 문서
 - 기본 DB 스키마 초안
 - 임베디드 PGlite 어댑터 + 스냅샷 지속 파이프라인 (계정/Docker 불필요)
+- Supabase(hosted) 스키마/RLS 반영 + pooler 접속 검증
+- 로그인/라우트 스모크 테스트 도구 (`npm run dev:login`)
 
 ### 완료 기준
 - `npm run db:migrate && npm run db:seed` 임베디드 DB에서 성공 (완료)
 - `npm run db:dump`/`db:restore` 스냅샷 왕복 검증 (완료)
-- 잡코리아/사람인 각각 수동 로그인 후 인재검색 화면까지 100% 재현
-- 공고지원/인재검색 각각 최소 1건 저장 성공
+- Supabase 스키마/시드/RLS 인프라 반영 (완료, UI는 Phase 3.5)
+- **잡코리아** 기업회원 로그인 + 지원자관리/인재검색 라우트 진입 — `npm run dev:login jobkorea` 통과 (완료)
+- **사람인** 2단계 인증 — 인증 대기 (`npm run dev:session -- saramin`, 사용자 1회)
+- **잡코리아** 기업회원 로그인 + 지원자 20건·인재검색 20건 DB 저장 (완료, 2026-07-10)
+- **사람인** 2단계 인증 — 인증 대기 (`npm run dev:session -- saramin`)
+
+> Phase 0·1(잡코리아) 완료. **Phase 2**: 크롤 cron 18:00/18:20 KST 활성, 세션 스냅샷·재시도·crawl_window 적용. 리포트/메일 cron 은 Phase 3.
 
 ---
 
@@ -194,14 +230,17 @@ GitHub Pages는 정적 호스팅이라 브라우저에서 임베디드 DB로 직
 - 실패 시 `crawl_failures` 기록 + screenshot 저장
 
 ### 완료 기준
-- 잡코리아/사람인 각각:
+- **잡코리아** (우선):
   - 공고지원 20건 샘플 수집 성공
   - 인재검색 20건 샘플 수집 성공
+- **사람인**: 2단계 인증 완료 후 동일 기준 적용
 - 실패 케이스(로그인 실패/목록 없음/상세 진입 실패) 분류 가능
 
 ---
 
 ## Phase 2. 자동 배치 + 안정화 (2주)
+
+> **현재 상태 (2026-07-10)**: 크롤 워크플로 cron 활성 + `AUTO_CRAWL_ENABLED=true`. 세션은 `data/sessions-bundle.json` 으로 `db-snapshot` 브랜치에 함께 지속. 리포트(07:50)·메일(08:00) cron 은 Phase 3.
 
 ### 범위
 - 18:00/18:20 자동 수집 스케줄 적용
@@ -246,26 +285,24 @@ GitHub Pages는 정적 호스팅이라 브라우저에서 임베디드 DB로 직
 
 ---
 
-## Phase 3.5. 인터랙티브 웹 UI (Supabase, 1~2주)
+## Phase 3.5. 인터랙티브 웹 UI (Supabase)
 
-### 전제
-- Supabase 프로젝트 준비 완료(`docs/develop/supabase-setup.md`), `DATABASE_URL` 및 anon key 확보
+> **구현 완료 (코드)**. 사용자 작업: Auth 유저 생성, Secrets, Pages 배포. 가이드: `docs/develop/web-ui.md`
 
 ### 범위
-- GitHub Pages 정적 프론트엔드(T-Client 유사 CSS, 차별화)
+- GitHub Pages 정적 프론트엔드 (`web/`)
 - Supabase Auth 기업 이메일 로그인
-- 후보 조회/추천 태그/면접 일정·결과/노쇼/입사완료/블락(소프트 삭제) 웹 입력
+- 후보 조회 / 추천 태그 / 면접 일정·결과 / 블락(소프트 삭제)
 
 ### 구현 항목
-- `db/supabase/` RLS 정책 + `auth.users`→`staff_profiles` 매핑 트리거 적용
-- 프론트: Supabase JS 클라이언트(anon key), 세션/권한 처리
-- 크롤러 파이프라인은 `DATABASE_URL`을 Supabase로 전환(코드 변경 없음)
-- 임베디드 PGlite는 로컬 개발 기본값으로 유지
+- [x] `db/supabase/0001` + `0002` RLS·감사 트리거
+- [x] `web/` SPA (supabase-js CDN)
+- [x] `deploy-web.yml` Pages 배포
 
-### 완료 기준
-- 직원 로그인 후 태그/면접/삭제상태 웹에서 실시간 반영
-- RLS로 비인가 쓰기 차단 확인
-- 크롤러(Actions)와 웹 UI가 동일 데이터 공유 확인
+### 완료 기준 (운영 검증)
+- [ ] 직원 로그인 후 태그/면접/상태 웹 반영
+- [ ] RLS로 비인가 쓰기 차단
+- [ ] 크롤러와 웹이 동일 Supabase 데이터 공유
 
 ---
 
@@ -409,7 +446,7 @@ selectors:
 
 ## 8) 즉시 실행 To-Do
 
-- `docs/develop` 하위에 사이트별 Route Map 파일 생성
-- connector 공통 `Navigator` 인터페이스 먼저 확정
-- 잡코리아/사람인 각각 dry-run 워크플로 생성
-- 18:00/08:00 스케줄 크론을 UTC 기준으로 확정
+- (보류) **사람인** 2단계 인증 — `npm run dev:session -- saramin` 완료 후 Phase 1 재개
+- **Phase 2** — 크롤 cron 18:00/18:20 KST + 세션 스냅샷·재시도 (리포트/메일 cron 은 Phase 3)
+- **Phase 3** — 추천 태그·면접·08:00 메일 로직 연동
+- **Phase 3.5** — GitHub Pages + Supabase Auth 웹 UI

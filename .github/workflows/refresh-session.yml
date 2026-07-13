@@ -1,6 +1,6 @@
 name: refresh-session
 
-# 세션 재발급 전용 (수동 실행 / 로그인 실패 시 복구)
+# 세션 재발급 — 수동 실행 (결과 메일 항시 발송)
 on:
   workflow_dispatch:
     inputs:
@@ -30,6 +30,10 @@ jobs:
       SARAMIN_USERNAME: ${{ secrets.SARAMIN_USERNAME }}
       SARAMIN_PASSWORD: ${{ secrets.SARAMIN_PASSWORD }}
       HEADLESS: "true"
+      GMAIL_USER: ${{ secrets.GMAIL_USER }}
+      GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+      MAIL_FROM: ${{ secrets.MAIL_FROM }}
+      ACTION_NOTIFY_EMAIL: yj.kim@tbell.co.kr
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -45,7 +49,13 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - name: Load DB (restore + migrate)
         uses: ./.github/actions/db-load
-      - name: Route check (dry-run)
-        run: npm run dev:check
+      - name: Refresh session
+        run: npm run session:refresh -- "${{ github.event.inputs.platform }}"
       - name: Save DB snapshot
+        if: success()
         uses: ./.github/actions/db-save
+      - name: Notify result
+        if: always()
+        uses: ./.github/actions/notify-result
+        with:
+          conclusion: ${{ job.status }}

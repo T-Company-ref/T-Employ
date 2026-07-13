@@ -1,7 +1,6 @@
 name: db-setup-supabase
 
-# Supabase 스키마 + RLS/auth 정책 적용 (버튼 실행)
-# 사전조건: DATABASE_URL(Session pooler), PGSSL, (선택) 시드용 Secrets 등록
+# Supabase 스키마 + RLS/auth 정책 적용 (수동 실행, 결과 메일 항시 발송)
 on:
   workflow_dispatch:
     inputs:
@@ -18,6 +17,10 @@ jobs:
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       PGSSL: "true"
+      GMAIL_USER: ${{ secrets.GMAIL_USER }}
+      GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+      MAIL_FROM: ${{ secrets.MAIL_FROM }}
+      ACTION_NOTIFY_EMAIL: yj.kim@tbell.co.kr
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -40,3 +43,8 @@ jobs:
         run: npm run db:supabase
       - name: Status
         run: npm run db:status
+      - name: Notify result
+        if: always()
+        uses: ./.github/actions/notify-result
+        with:
+          conclusion: ${{ job.status }}

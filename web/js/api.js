@@ -46,6 +46,90 @@ export async function getMyStaff(sb) {
   };
 }
 
+export async function listPostings(sb, { q = "", platform = "", limit = 100 } = {}) {
+  let query = sb
+    .from("job_postings")
+    .select("id, platform, title, external_posting_id, source_url, meta, opened_at, closed_at, created_at, updated_at")
+    .order("updated_at", { ascending: false })
+    .limit(limit);
+
+  if (platform) query = query.eq("platform", platform);
+  const { data, error } = await query;
+  if (error) throw error;
+
+  const rows = data ?? [];
+  const ids = rows.map((r) => r.id);
+  let counts = {};
+  if (ids.length) {
+    const { data: apps, error: appErr } = await sb
+      .from("applications")
+      .select("posting_id")
+      .in("posting_id", ids);
+    if (appErr) throw appErr;
+    for (const a of apps ?? []) {
+      if (!a.posting_id) continue;
+      counts[a.posting_id] = (counts[a.posting_id] || 0) + 1;
+    }
+  }
+
+  const needle = q.trim().toLowerCase();
+  return rows
+    .map((r) => ({ ...r, applicant_count: counts[r.id] || 0 }))
+    .filter((row) => {
+      if (!needle) return true;
+      const hay = [row.title, row.external_posting_id, row.platform, row.meta?.manager, row.meta?.postingNumber]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(needle);
+    });
+}
+
+export async function getDashboardStats(sb) {
+  const [
+    apps,
+    talents,
+    postings,
+    docs,
+    recentApps,
+    stageRows,
+  ] = await Promise.all([
+    sb.from("applications").select("id", { count: "exact", head: true }),
+    sb.from("talent_pool_candidates").select("id", { count: "exact", head: true }),
+    sb.from("job_postings").select("id", { count: "exact", head: true }),
+    sb.from("candidate_documents").select("id", { count: "exact", head: true }),
+    sb
+      .from("applications")
+      .select(
+        `id, applied_at, current_stage, platform,
+         candidate:candidates ( name ),
+         posting:job_postings ( title )`,
+      )
+      .order("applied_at", { ascending: false })
+      .limit(8),
+    sb.from("applications").select("current_stage"),
+  ]);
+
+  for (const r of [apps, talents, postings, docs, recentApps, stageRows]) {
+    if (r.error) throw r.error;
+  }
+
+  const byStage = {};
+  for (const row of stageRows.data ?? []) {
+    const k = row.current_stage || "unknown";
+    byStage[k] = (byStage[k] || 0) + 1;
+  }
+
+  return {
+    applicants: apps.count ?? 0,
+    talents: talents.count ?? 0,
+    postings: postings.count ?? 0,
+    documents: docs.count ?? 0,
+    byStage,
+    recentApps: recentApps.data ?? [],
+  };
+}
+
 export async function listApplications(sb, { q = "", platform = "", limit = 100 } = {}) {
   let query = sb
     .from("applications")

@@ -17,12 +17,18 @@ runs:
         fi
         tmp="$(mktemp -d)"
         cp data/pgdata.tar.gz "$tmp/pgdata.tar.gz"
+        if [[ -f data/sessions-bundle.json ]]; then
+          cp data/sessions-bundle.json "$tmp/sessions-bundle.json"
+        fi
         cd "$tmp"
         git init -q
         git config user.name "t-employ-bot"
         git config user.email "t-employ-bot@users.noreply.github.com"
         git checkout -q -b db-snapshot
         git add pgdata.tar.gz
+        if [[ -f sessions-bundle.json ]]; then
+          git add sessions-bundle.json
+        fi
         git commit -q -m "db snapshot $(date -u +%FT%TZ)"
         git push -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" db-snapshot
         echo "[db-save] db-snapshot 브랜치로 스냅샷 강제 푸시 완료"

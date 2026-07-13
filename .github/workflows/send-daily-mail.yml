@@ -1,9 +1,7 @@
 name: send-daily-mail
 
-# 매일 08:00 KST (전일 23:00 UTC) 요약 메일 발송
+# 요약 메일 발송 — 수동 실행 (cron 비활성, 결과 메일 항시 발송)
 on:
-  schedule:
-    - cron: "0 23 * * *"
   workflow_dispatch:
 
 concurrency:
@@ -21,12 +19,12 @@ jobs:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       PGSSL: ${{ secrets.DATABASE_URL != '' && 'true' || 'false' }}
       GITHUB_TOKEN: ${{ github.token }}
-      SMTP_HOST: ${{ secrets.SMTP_HOST }}
-      SMTP_PORT: ${{ secrets.SMTP_PORT }}
-      SMTP_USER: ${{ secrets.SMTP_USER }}
-      SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+      GMAIL_USER: ${{ secrets.GMAIL_USER }}
+      GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
       MAIL_FROM: ${{ secrets.MAIL_FROM }}
-      DAILY_REPORT_RECIPIENTS: ${{ secrets.DAILY_REPORT_RECIPIENTS }}
+      DAILY_REPORT_RECIPIENTS: yj.kim@tbell.co.kr
+      AUTO_CRAWL_ENABLED: "false"
+      ACTION_NOTIFY_EMAIL: yj.kim@tbell.co.kr
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -39,4 +37,10 @@ jobs:
       - name: Send daily mail
         run: npm run mail:send
       - name: Save DB snapshot
+        if: success()
         uses: ./.github/actions/db-save
+      - name: Notify result
+        if: always()
+        uses: ./.github/actions/notify-result
+        with:
+          conclusion: ${{ job.status }}

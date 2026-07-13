@@ -1,10 +1,11 @@
 import { buildDailyReport } from '../db/repositories/reporting.js';
 import { query, closePool } from '../db/client.js';
 import { env } from '../config/env.js';
+import { assertScheduledAutomationAllowed } from '../crawler/crawlPolicy.js';
 
 /**
- * 매일 07:50 KST: 전일 데이터를 집계하여 요약 본문을 생성하고,
- * mail_jobs 에 발송 대기(queued) 작업으로 등록한다.
+ * 전일 데이터 집계 및 요약 메일 큐 등록.
+ * cron 없이 workflow_dispatch / CLI 수동 실행.
  */
 export function renderReportHtml(report: Awaited<ReturnType<typeof buildDailyReport>>): string {
   const rows = report.byPlatform
@@ -32,20 +33,22 @@ export function renderReportHtml(report: Awaited<ReturnType<typeof buildDailyRep
 }
 
 async function main(): Promise<void> {
+  assertScheduledAutomationAllowed('report:compose');
+
   const report = await buildDailyReport();
   const html = renderReportHtml(report);
   const recipients = env.dailyReportRecipients();
   const subject = `[TBELL Employ] ${report.date} 지원 현황 요약`;
 
   await query(
-    `INSERT INTO mail_jobs (mail_type, template_id, recipients, subject, status, scheduled_at)
-     VALUES ('daily_report', 'daily-summary', $1, $2, 'queued', now())`,
-    [recipients, subject],
+    `INSERT INTO mail_jobs (mail_type, template_id, recipients, subject, body_html, status, scheduled_at)
+     VALUES ('daily_report', 'daily-summary', $1, $2, $3, 'queued', now())`,
+    [recipients, subject, html],
   );
 
-  // 본문은 발송 잡에서 다시 생성하거나, 여기서 파일/스토리지 보관 가능
-  console.log('[report:compose] 요약 생성 완료');
-  console.log(html.slice(0, 200) + ' ...');
+  console.log('[report:compose] 요약 생성·메일 큐 등록 완료');
+  console.log('  수신자:', recipients.join(', '));
+  console.log('  신규 지원:', report.newApplicants, '/ 인재:', report.newTalents);
 }
 
 main()

@@ -6,7 +6,6 @@ import {
   platformLabel,
   label,
   STAGE_LABELS,
-  PROPOSAL_STATUS_LABELS,
   TAG_LABELS,
   MEETING_LABELS,
   INTERVIEW_RESULT_LABELS,
@@ -17,12 +16,13 @@ const appEl = document.getElementById("app");
 /** @type {import('@supabase/supabase-js').SupabaseClient | null} */
 let sb = null;
 let staff = null;
-let tab = "applicants";
+let tab = "dashboard"; // dashboard | postings | applicants | talent
 let rows = [];
 let selected = null;
 let filterQ = "";
 let filterPlatform = "";
 let toastTimer = null;
+let dashboardStats = null;
 
 function esc(s) {
   return String(s ?? "")
@@ -60,13 +60,13 @@ function renderDocuments(docs) {
   }
   return `<ul class="doc-list">${docs
     .map((d) => {
-      const canDownload = d.file_url && !d.file_url.startsWith("file://");
+      const canOpen = d.file_url && !d.file_url.startsWith("file://");
       return `<li class="doc-item">
         <span>이력서 · ${esc(new Date(d.collected_at).toLocaleDateString("ko-KR"))}</span>
         ${
-          canDownload
-            ? `<a class="btn btn-primary btn-sm" href="${esc(d.file_url)}" target="_blank" rel="noopener" download>PDF 다운로드</a>`
-            : `<span class="muted">로컬 저장 (웹 다운로드 불가)</span>`
+          canOpen
+            ? `<a class="btn btn-primary btn-sm" href="${esc(d.file_url)}" target="_blank" rel="noopener">PDF</a>`
+            : `<span class="muted">로컬 저장</span>`
         }
       </li>`;
     })
@@ -122,20 +122,30 @@ function renderLogin(errorMsg = "") {
 function shell(innerList, innerDetail) {
   const who = staff?.display_name || staff?.email || "—";
   const role = staff?.role || "";
+  const tabs = [
+    ["dashboard", "대시보드"],
+    ["postings", "공고"],
+    ["applicants", "지원자"],
+    ["talent", "인재검색"],
+  ];
   appEl.innerHTML = `
     <div class="app-shell">
       <header class="topbar">
         <div class="brand">TBELL <span>Employ</span></div>
         <nav class="nav">
-          <button type="button" data-tab="applicants" class="${tab === "applicants" ? "active" : ""}">지원자</button>
-          <button type="button" data-tab="talent" class="${tab === "talent" ? "active" : ""}">인재검색</button>
+          ${tabs
+            .map(
+              ([id, labelText]) =>
+                `<button type="button" data-tab="${id}" class="${tab === id ? "active" : ""}">${labelText}</button>`,
+            )
+            .join("")}
         </nav>
         <div class="userbox">
           <span>${esc(who)}${role ? ` · ${esc(role)}` : ""}</span>
           <button type="button" class="btn btn-ghost btn-sm" id="btn-logout">로그아웃</button>
         </div>
       </header>
-      <div class="main">
+      <div class="main ${tab === "dashboard" ? "main-dashboard" : ""}">
         <section class="list-pane" id="list-pane">${innerList}</section>
         <aside class="detail-pane" id="detail-pane">${innerDetail}</aside>
       </div>
@@ -155,6 +165,138 @@ function shell(innerList, innerDetail) {
   });
 }
 
+function listToolbar(title, { showPlatform = true } = {}) {
+  return `
+    <div class="toolbar">
+      <h2>${esc(title)}</h2>
+      <input class="search" id="q" placeholder="검색…" value="${esc(filterQ)}" />
+      ${
+        showPlatform
+          ? `<select class="select" id="platform">
+        <option value="">전체 플랫폼</option>
+        <option value="jobkorea" ${filterPlatform === "jobkorea" ? "selected" : ""}>잡코리아</option>
+        <option value="saramin" ${filterPlatform === "saramin" ? "selected" : ""}>사람인</option>
+      </select>`
+          : ""
+      }
+      <button type="button" class="btn btn-ghost btn-sm" id="btn-refresh">새로고침</button>
+    </div>`;
+}
+
+function bindListChrome() {
+  document.getElementById("btn-refresh")?.addEventListener("click", () => refresh(false));
+  document.getElementById("q")?.addEventListener("change", async (e) => {
+    filterQ = e.target.value;
+    await refresh(false);
+  });
+  document.getElementById("q")?.addEventListener("keydown", async (e) => {
+    if (e.key === "Enter") {
+      filterQ = e.target.value;
+      await refresh(false);
+    }
+  });
+  document.getElementById("platform")?.addEventListener("change", async (e) => {
+    filterPlatform = e.target.value;
+    await refresh(false);
+  });
+}
+
+function renderDashboard() {
+  const s = dashboardStats || {
+    applicants: 0,
+    talents: 0,
+    postings: 0,
+    documents: 0,
+    byStage: {},
+    recentApps: [],
+  };
+  const stageHtml = Object.entries(s.byStage)
+    .sort((a, b) => b[1] - a[1])
+    .map(
+      ([k, v]) =>
+        `<div class="stat-row"><span>${esc(stageLabel(k))}</span><strong>${v}</strong></div>`,
+    )
+    .join("") || `<div class="muted">단계 데이터 없음</div>`;
+
+  const recent = (s.recentApps || [])
+    .map(
+      (r) => `<li>
+        <button type="button" class="linkish" data-goto-app="${esc(r.id)}">
+          <b>${esc(r.candidate?.name || "(이름 없음)")}</b>
+          <span class="muted">${esc(r.posting?.title || "공고 미연결")} · ${esc(stageLabel(r.current_stage))}</span>
+        </button>
+      </li>`,
+    )
+    .join("");
+
+  return `
+    <div class="toolbar"><h2>대시보드</h2>
+      <button type="button" class="btn btn-ghost btn-sm" id="btn-refresh">새로고침</button>
+    </div>
+    <div class="dash-grid">
+      <button type="button" class="dash-card" data-jump="applicants">
+        <div class="dash-label">지원자</div>
+        <div class="dash-num">${s.applicants}</div>
+      </button>
+      <button type="button" class="dash-card" data-jump="talent">
+        <div class="dash-label">인재검색</div>
+        <div class="dash-num">${s.talents}</div>
+      </button>
+      <button type="button" class="dash-card" data-jump="postings">
+        <div class="dash-label">공고</div>
+        <div class="dash-num">${s.postings}</div>
+      </button>
+      <div class="dash-card static">
+        <div class="dash-label">이력서 PDF</div>
+        <div class="dash-num">${s.documents}</div>
+      </div>
+    </div>
+    <div class="panel" style="margin-top:14px">
+      <h3>지원 단계 현황</h3>
+      <div class="stat-list">${stageHtml}</div>
+    </div>
+    <div class="panel">
+      <h3>최근 지원자</h3>
+      <ul class="recent-list">${recent || `<li class="muted">없음</li>`}</ul>
+    </div>`;
+}
+
+function renderDashboardDetail() {
+  return `
+    <div class="panel sticky-help">
+      <h3>빠른 안내</h3>
+      <p class="muted">왼쪽에서 수치를 클릭하면 해당 목록으로 이동합니다. 지원자·인재검색을 선택하면 이 영역에 상세가 고정되어 표시됩니다.</p>
+      <div class="actions" style="margin-top:12px">
+        <button type="button" class="btn btn-primary btn-sm" data-jump="applicants" style="width:auto">지원자 보기</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-jump="postings" style="width:auto">공고 보기</button>
+      </div>
+    </div>`;
+}
+
+function renderPostingCards() {
+  if (!rows.length) return `<div class="empty">등록된 공고가 없습니다.</div>`;
+  return `<div class="card-list">${rows
+    .map((r) => {
+      const sel = selected?.id === r.id ? "selected" : "";
+      const meta = r.meta || {};
+      return `<article class="candidate-card ${sel}" data-id="${esc(r.id)}">
+        <div class="card-name-row">
+          <span class="card-name">${esc(r.title || "(제목 없음)")}</span>
+          ${meta.status ? `<span class="badge">${esc(meta.status)}</span>` : ""}
+        </div>
+        <div class="card-meta-row">
+          <span class="meta-pill platform">${esc(platformLabel(r.platform))}</span>
+          <span class="meta-pill">${esc(meta.postingNumber || r.external_posting_id || "—")}</span>
+          <span class="meta-pill stage">지원 ${r.applicant_count ?? 0}명</span>
+        </div>
+        <div class="card-footer">
+          <span class="muted">${esc(meta.manager || "담당자 —")}${meta.period ? ` · ${esc(meta.period)}` : ""}</span>
+        </div>
+      </article>`;
+    })
+    .join("")}</div>`;
+}
+
 function renderApplicantsCards() {
   if (!rows.length) {
     return `<div class="empty">지원자가 없습니다. 크롤 수집 후 새로고침하세요.</div>`;
@@ -172,7 +314,6 @@ function renderApplicantsCards() {
         !r.is_active || !r.candidate?.is_active ? `<span class="badge blocked">블락</span>` : "",
         meta.platformStatus ? `<span class="badge">${esc(meta.platformStatus)}</span>` : "",
       ].join(" ");
-
       const subParts = [meta.genderAge, meta.careerTotal].filter(Boolean);
 
       return `<article class="candidate-card ${sel}" data-id="${esc(r.id)}">
@@ -188,7 +329,13 @@ function renderApplicantsCards() {
           ${meta.desiredSalary ? `<span class="meta-pill">${esc(meta.desiredSalary)}</span>` : ""}
         </div>
         ${renderChips(meta.recommendTags, "badge-chip")}
-        ${meta.educationSchool ? `<div class="card-sub">${esc([meta.educationLevel, meta.educationSchool, meta.educationMajor].filter(Boolean).join(" · "))}</div>` : ""}
+        ${
+          meta.educationSchool
+            ? `<div class="card-sub">${esc(
+                [meta.educationLevel, meta.educationSchool, meta.educationMajor].filter(Boolean).join(" · "),
+              )}</div>`
+            : ""
+        }
         ${renderChips(meta.careerHistory?.slice(0, 3))}
         <div class="card-footer">
           <span class="card-posting">${esc(posting)}${esc(postingNo)}</span>
@@ -199,9 +346,7 @@ function renderApplicantsCards() {
 }
 
 function renderTalentCards() {
-  if (!rows.length) {
-    return `<div class="empty">인재검색 후보가 없습니다.</div>`;
-  }
+  if (!rows.length) return `<div class="empty">인재검색 후보가 없습니다.</div>`;
   return `<div class="card-list">${rows
     .map((r) => {
       const sel = selected?.id === r.id ? "selected" : "";
@@ -212,7 +357,6 @@ function renderTalentCards() {
         isNew(r.sourced_at) ? `<span class="badge new">NEW</span>` : "",
         !r.is_active ? `<span class="badge blocked">블락</span>` : "",
       ].join(" ");
-
       const subParts = [meta.genderAge, meta.careerText].filter(Boolean);
 
       return `<article class="candidate-card ${sel}" data-id="${esc(r.id)}">
@@ -235,20 +379,6 @@ function renderTalentCards() {
     .join("")}</div>`;
 }
 
-function listToolbar(title) {
-  return `
-    <div class="toolbar">
-      <h2>${esc(title)}</h2>
-      <input class="search" id="q" placeholder="검색 (이름·공고·키워드…)" value="${esc(filterQ)}" />
-      <select class="select" id="platform">
-        <option value="">전체 플랫폼</option>
-        <option value="jobkorea" ${filterPlatform === "jobkorea" ? "selected" : ""}>잡코리아</option>
-        <option value="saramin" ${filterPlatform === "saramin" ? "selected" : ""}>사람인</option>
-      </select>
-      <button type="button" class="btn btn-ghost btn-sm" id="btn-refresh">새로고침</button>
-    </div>`;
-}
-
 function stageOptions(current) {
   return Object.entries(STAGE_LABELS)
     .map(([v, l]) => `<option value="${v}" ${current === v ? "selected" : ""}>${esc(l)}</option>`)
@@ -258,19 +388,65 @@ function stageOptions(current) {
 async function renderDetail() {
   const pane = document.getElementById("detail-pane");
   if (!pane) return;
-  if (!selected) {
-    pane.innerHTML = `<div class="empty">왼쪽 목록에서 항목을 선택하세요.</div>`;
+
+  if (tab === "dashboard") {
+    pane.innerHTML = renderDashboardDetail();
+    pane.querySelectorAll("[data-jump]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        tab = btn.getAttribute("data-jump");
+        selected = null;
+        await refresh();
+      });
+    });
     return;
   }
 
-  if (staff?._unlinked || !staff?.id) {
+  if (!selected) {
+    pane.innerHTML = `<div class="empty detail-empty">왼쪽 목록에서 항목을 선택하세요.</div>`;
+    return;
+  }
+
+  if ((tab === "applicants" || tab === "talent") && (staff?._unlinked || !staff?.id)) {
     pane.innerHTML = `<div class="panel"><h3>권한 연결 필요</h3>
       <p class="muted">로그인은 됐지만 staff_profiles 가 연결되지 않았습니다.</p></div>`;
     return;
   }
 
-  if (tab === "applicants") await renderApplicantDetail(pane);
+  if (tab === "postings") await renderPostingDetail(pane);
+  else if (tab === "applicants") await renderApplicantDetail(pane);
   else await renderTalentDetail(pane);
+}
+
+async function renderPostingDetail(pane) {
+  const r = selected;
+  const meta = r.meta || {};
+  pane.innerHTML = `
+    <div class="panel">
+      <h3>${esc(r.title || "(제목 없음)")}</h3>
+      <dl class="meta-grid">
+        <dt>플랫폼</dt><dd>${esc(platformLabel(r.platform))}</dd>
+        <dt>공고번호</dt><dd>${esc(meta.postingNumber || r.external_posting_id || "—")}</dd>
+        <dt>상태</dt><dd>${esc(meta.status || "—")}</dd>
+        <dt>담당자</dt><dd>${esc(meta.manager || "—")}</dd>
+        <dt>기간</dt><dd>${esc(meta.period || "—")}</dd>
+        <dt>지원자</dt><dd>${r.applicant_count ?? 0}명</dd>
+        <dt>공고 보기</dt><dd>${
+          r.source_url
+            ? `<a href="${esc(r.source_url)}" target="_blank" rel="noopener">잡코리아에서 보기</a>`
+            : "—"
+        }</dd>
+      </dl>
+      <div class="actions">
+        <button type="button" class="btn btn-primary btn-sm" id="btn-view-apps" style="width:auto">이 공고 지원자 보기</button>
+      </div>
+    </div>`;
+
+  document.getElementById("btn-view-apps")?.addEventListener("click", async () => {
+    tab = "applicants";
+    filterQ = r.title || "";
+    selected = null;
+    await refresh();
+  });
 }
 
 async function renderApplicantDetail(pane) {
@@ -302,12 +478,16 @@ async function renderApplicantDetail(pane) {
         <dt>공고</dt><dd>${esc(r.posting?.title || "공고명 미수집")}</dd>
         <dt>공고번호</dt><dd>${esc(postingMeta.postingNumber || r.posting?.external_posting_id || "—")}</dd>
         <dt>담당자</dt><dd>${esc(postingMeta.manager || "—")}</dd>
-        <dt>공고기간</dt><dd>${esc(postingMeta.period || "—")}</dd>
-        <dt>학력</dt><dd>${esc([meta.educationLevel, meta.educationSchool, meta.educationMajor].filter(Boolean).join(" · ") || "—")}</dd>
+        <dt>학력</dt><dd>${esc(
+          [meta.educationLevel, meta.educationSchool, meta.educationMajor].filter(Boolean).join(" · ") || "—",
+        )}</dd>
         <dt>희망연봉</dt><dd>${esc(meta.desiredSalary || "—")}</dd>
-        <dt>진행상태</dt><dd>${esc(meta.platformStatus || stageLabel(r.current_stage))}</dd>
         <dt>단계</dt><dd>${esc(stageLabel(r.current_stage))}</dd>
-        ${r.posting?.source_url ? `<dt>공고 보기</dt><dd><a href="${esc(r.posting.source_url)}" target="_blank" rel="noopener">잡코리아 공고</a></dd>` : ""}
+        ${
+          r.posting?.source_url
+            ? `<dt>공고 보기</dt><dd><a href="${esc(r.posting.source_url)}" target="_blank" rel="noopener">잡코리아 공고</a></dd>`
+            : ""
+        }
       </dl>
     </div>
 
@@ -318,7 +498,7 @@ async function renderApplicantDetail(pane) {
 
     <div class="panel">
       <h3>추천 태그</h3>
-      <div class="chip-row" id="tag-list">
+      <div class="chip-row">
         ${
           tags.length
             ? tags
@@ -384,7 +564,7 @@ async function renderApplicantDetail(pane) {
                   .map(([v, l]) => `<option value="${v}">${esc(l)}</option>`)
                   .join("")}
               </select>
-              <input id="iv-hired" type="date" placeholder="입사일(선택)" />
+              <input id="iv-hired" type="date" />
               <button type="button" class="btn btn-ghost btn-sm" id="btn-iv-result" style="width:auto"
                 data-ivid="${esc(interviews[0].id)}">결과 반영</button>
             </div>`
@@ -548,7 +728,11 @@ async function renderTalentDetail(pane) {
       <dl class="meta-grid">
         <dt>플랫폼</dt><dd>${esc(platformLabel(r.platform))}</dd>
         <dt>상태</dt><dd>${esc(proposalLabel(r.proposal_status))}</dd>
-        <dt>원본</dt><dd>${r.profile_url ? `<a href="${esc(r.profile_url)}" target="_blank" rel="noopener">잡코리아에서 보기</a>` : "—"}</dd>
+        <dt>원본</dt><dd>${
+          r.profile_url
+            ? `<a href="${esc(r.profile_url)}" target="_blank" rel="noopener">잡코리아에서 보기</a>`
+            : "—"
+        }</dd>
       </dl>
     </div>
 
@@ -589,7 +773,12 @@ async function renderTalentDetail(pane) {
       <ul class="timeline" style="margin-top:12px">
         ${
           history.length
-            ? history.map((h) => `<li><b>${esc(h.status_code)}</b> · ${esc(new Date(h.changed_at).toLocaleString("ko-KR"))}</li>`).join("")
+            ? history
+                .map(
+                  (h) =>
+                    `<li><b>${esc(h.status_code)}</b> · ${esc(new Date(h.changed_at).toLocaleString("ko-KR"))}</li>`,
+                )
+                .join("")
             : `<li class="muted">이력 없음</li>`
         }
       </ul>
@@ -638,38 +827,7 @@ async function renderTalentDetail(pane) {
   });
 }
 
-async function refresh(resetSelection = true) {
-  if (resetSelection) selected = null;
-  const keepId = selected?.id;
-
-  if (tab === "applicants") {
-    rows = await api.listApplications(sb, { q: filterQ, platform: filterPlatform });
-  } else {
-    rows = await api.listTalents(sb, { q: filterQ, platform: filterPlatform });
-  }
-
-  if (keepId) selected = rows.find((r) => r.id === keepId) || null;
-
-  const title = tab === "applicants" ? "공고 지원자" : "인재검색";
-  const cards = tab === "applicants" ? renderApplicantsCards() : renderTalentCards();
-  shell(`${listToolbar(title)}${cards}`, `<div class="empty">선택 대기…</div>`);
-
-  document.getElementById("btn-refresh")?.addEventListener("click", () => refresh(false));
-  document.getElementById("q")?.addEventListener("change", async (e) => {
-    filterQ = e.target.value;
-    await refresh(false);
-  });
-  document.getElementById("q")?.addEventListener("keydown", async (e) => {
-    if (e.key === "Enter") {
-      filterQ = e.target.value;
-      await refresh(false);
-    }
-  });
-  document.getElementById("platform")?.addEventListener("change", async (e) => {
-    filterPlatform = e.target.value;
-    await refresh(false);
-  });
-
+function bindCardSelection() {
   document.querySelectorAll(".candidate-card[data-id]").forEach((card) => {
     card.addEventListener("click", async () => {
       selected = rows.find((r) => r.id === card.getAttribute("data-id")) || null;
@@ -682,6 +840,65 @@ async function refresh(resetSelection = true) {
       }
     });
   });
+}
+
+async function refresh(resetSelection = true) {
+  if (resetSelection) selected = null;
+  const keepId = selected?.id;
+
+  if (tab === "dashboard") {
+    dashboardStats = await api.getDashboardStats(sb);
+    shell(renderDashboard(), renderDashboardDetail());
+    bindListChrome();
+    document.querySelectorAll("[data-jump]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        tab = btn.getAttribute("data-jump");
+        selected = null;
+        await refresh();
+      });
+    });
+    document.querySelectorAll("[data-goto-app]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        tab = "applicants";
+        filterQ = "";
+        await refresh(true);
+        selected = rows.find((r) => r.id === btn.getAttribute("data-goto-app")) || null;
+        if (selected) {
+          document
+            .querySelector(`.candidate-card[data-id="${selected.id}"]`)
+            ?.classList.add("selected");
+          await renderDetail();
+        }
+      });
+    });
+    await renderDetail();
+    return;
+  }
+
+  if (tab === "postings") {
+    rows = await api.listPostings(sb, { q: filterQ, platform: filterPlatform });
+  } else if (tab === "applicants") {
+    rows = await api.listApplications(sb, { q: filterQ, platform: filterPlatform });
+  } else {
+    rows = await api.listTalents(sb, { q: filterQ, platform: filterPlatform });
+  }
+
+  if (keepId) selected = rows.find((r) => r.id === keepId) || null;
+
+  const title = tab === "postings" ? "채용 공고" : tab === "applicants" ? "공고 지원자" : "인재검색";
+  const cards =
+    tab === "postings"
+      ? renderPostingCards()
+      : tab === "applicants"
+        ? renderApplicantsCards()
+        : renderTalentCards();
+
+  shell(
+    `${listToolbar(title)}${cards}`,
+    `<div class="empty detail-empty">왼쪽 목록에서 항목을 선택하세요.</div>`,
+  );
+  bindListChrome();
+  bindCardSelection();
 
   if (selected) {
     try {
@@ -690,8 +907,7 @@ async function refresh(resetSelection = true) {
       toast(e.message, true);
     }
   } else {
-    document.getElementById("detail-pane").innerHTML =
-      `<div class="empty">왼쪽 목록에서 항목을 선택하세요.</div>`;
+    await renderDetail();
   }
 }
 

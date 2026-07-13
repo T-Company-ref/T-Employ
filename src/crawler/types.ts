@@ -27,6 +27,8 @@ export interface LoginConfig {
   session_expired_selector?: string;
   fields: { username: string; password: string };
   submit: string;
+  /** 로그인 폼 입력 전에 실행할 단계 (예: 기업회원 탭 전환) */
+  pre_steps?: NavStep[];
 }
 
 export interface RouteMap {

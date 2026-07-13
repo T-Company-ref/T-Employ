@@ -5,8 +5,13 @@
 INSERT INTO platform_configs (platform, enabled, priority, crawl_window, rate_limit, route_version)
 VALUES
   ('jobkorea', true, 10, '18:00-22:00', 30, '2026-07-07'),
-  ('saramin',  true, 20, '18:00-22:00', 30, '2026-07-07')
-ON CONFLICT (platform) DO NOTHING;
+  ('saramin',  false, 20, '18:00-22:00', 30, '2026-07-07')
+ON CONFLICT (platform) DO UPDATE SET
+  enabled = EXCLUDED.enabled,
+  priority = EXCLUDED.priority,
+  crawl_window = EXCLUDED.crawl_window,
+  rate_limit = EXCLUDED.rate_limit,
+  route_version = EXCLUDED.route_version;
 
 -- 플랫폼 헬스 초기 행
 INSERT INTO platform_health (platform, status)
@@ -24,3 +29,11 @@ ON CONFLICT (platform, account_alias) DO NOTHING;
 INSERT INTO staff_profiles (nickname, display_name, role)
 VALUES ('admin', '운영자', 'operator')
 ON CONFLICT (nickname) DO NOTHING;
+
+-- 웹 로그인용 운영자 (Supabase Auth 이메일과 매칭 → auth_user_id 트리거로 연결)
+INSERT INTO staff_profiles (nickname, display_name, email, role)
+VALUES ('yj.kim', '김영진', 'yj.kim@tbell.co.kr', 'operator')
+ON CONFLICT (nickname) DO UPDATE SET
+  email = EXCLUDED.email,
+  display_name = EXCLUDED.display_name,
+  role = EXCLUDED.role;

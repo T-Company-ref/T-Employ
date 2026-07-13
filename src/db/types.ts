@@ -41,6 +41,39 @@ export interface Candidate {
   updated_at: Date;
 }
 
+/** 지원자 목록 행에서 추출한 부가 정보 */
+export interface ApplicantProfileMeta {
+  position?: string;
+  gender?: string;
+  age?: string;
+  genderAge?: string;
+  recommendTags?: string[];
+  educationLevel?: string;
+  educationSchool?: string;
+  educationMajor?: string;
+  careerTotal?: string;
+  careerHistory?: string[];
+  desiredSalary?: string;
+  platformStatus?: string;
+  readStatus?: string;
+  detailUrl?: string;
+}
+
+/** 공고 관리 목록에서 추출한 부가 정보 */
+export interface PostingMeta {
+  postingNumber?: string;
+  giNo?: string;
+  status?: string;
+  manager?: string;
+  period?: string;
+  registeredAt?: string;
+  modifiedAt?: string;
+  dday?: string;
+  viewUrl?: string;
+  applicantListUrl?: string;
+  applicantCounts?: Record<string, number>;
+}
+
 /** 커넥터가 반환하는 정규화된 지원자 레코드 */
 export interface NormalizedApplicant {
   platform: Platform;
@@ -51,7 +84,20 @@ export interface NormalizedApplicant {
   appliedAt: string; // ISO
   postingExternalId?: string;
   postingTitle?: string;
+  postingMeta?: PostingMeta;
+  profileMeta?: ApplicantProfileMeta;
   stage?: ApplicationStage;
+  resumePdf?: Buffer;
+}
+
+/** 잡코리아 인재검색 카드에서 추출한 부가 정보 */
+export interface TalentProfileMeta {
+  genderAge?: string;
+  careerText?: string;
+  company?: string;
+  roles?: string[];
+  skills?: string[];
+  badges?: string[];
 }
 
 /** 커넥터가 반환하는 정규화된 인재검색 후보 레코드 */
@@ -62,6 +108,9 @@ export interface NormalizedTalent {
   name?: string;
   headline?: string;
   summaryText?: string;
+  profileMeta?: TalentProfileMeta;
   searchCondition?: string;
   sourcedAt: string; // ISO
+  /** 크롤 시 이력서 PDF 바이트 (선택) */
+  resumePdf?: Buffer;
 }

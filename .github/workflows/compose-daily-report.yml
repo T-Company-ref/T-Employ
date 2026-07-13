@@ -1,9 +1,7 @@
 name: compose-daily-report
 
-# 매일 07:50 KST (전일 22:50 UTC) 전일 데이터 집계 및 요약 메일 큐 등록
+# 전일 요약 집계 — 수동 실행 (cron 비활성, 결과 메일 항시 발송)
 on:
-  schedule:
-    - cron: "50 22 * * *"
   workflow_dispatch:
 
 concurrency:
@@ -21,7 +19,12 @@ jobs:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       PGSSL: ${{ secrets.DATABASE_URL != '' && 'true' || 'false' }}
       GITHUB_TOKEN: ${{ github.token }}
-      DAILY_REPORT_RECIPIENTS: ${{ secrets.DAILY_REPORT_RECIPIENTS }}
+      DAILY_REPORT_RECIPIENTS: yj.kim@tbell.co.kr
+      AUTO_CRAWL_ENABLED: "false"
+      GMAIL_USER: ${{ secrets.GMAIL_USER }}
+      GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+      MAIL_FROM: ${{ secrets.MAIL_FROM }}
+      ACTION_NOTIFY_EMAIL: yj.kim@tbell.co.kr
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -34,4 +37,10 @@ jobs:
       - name: Compose daily report
         run: npm run report:compose
       - name: Save DB snapshot
+        if: success()
         uses: ./.github/actions/db-save
+      - name: Notify result
+        if: always()
+        uses: ./.github/actions/notify-result
+        with:
+          conclusion: ${{ job.status }}
