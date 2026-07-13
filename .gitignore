@@ -8,6 +8,9 @@ dist/
 .env
 .env.local
 *.local
+# 로컬에서 채운 웹 설정(배포는 Actions가 생성). 예시만 커밋.
+web/config.js
+web/config.local.js
 
 # playwright session state (never commit credentials/cookies)
 .sessions/
