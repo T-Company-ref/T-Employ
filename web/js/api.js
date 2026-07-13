@@ -85,7 +85,42 @@ export async function listPostings(sb, { q = "", platform = "", limit = 100 } = 
     });
 }
 
+function dayKey(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function buildDailySeries(rows, dateField, days = 14) {
+  const counts = {};
+  for (const row of rows) {
+    const k = dayKey(row[dateField]);
+    if (!k) continue;
+    counts[k] = (counts[k] || 0) + 1;
+  }
+  const labels = [];
+  const values = [];
+  const now = new Date();
+  now.setHours(12, 0, 0, 0);
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(now.getDate() - i);
+    const k = dayKey(d.toISOString());
+    labels.push(`${d.getMonth() + 1}/${d.getDate()}`);
+    values.push(counts[k] || 0);
+  }
+  return { labels, values };
+}
+
 export async function getDashboardStats(sb) {
+  const since = new Date();
+  since.setDate(since.getDate() - 30);
+  const sinceIso = since.toISOString();
+
   const [
     apps,
     talents,
@@ -93,6 +128,9 @@ export async function getDashboardStats(sb) {
     docs,
     recentApps,
     stageRows,
+    appDates,
+    talentDates,
+    platformRows,
   ] = await Promise.all([
     sb.from("applications").select("id", { count: "exact", head: true }),
     sb.from("talent_pool_candidates").select("id", { count: "exact", head: true }),
@@ -106,11 +144,34 @@ export async function getDashboardStats(sb) {
          posting:job_postings ( title )`,
       )
       .order("applied_at", { ascending: false })
-      .limit(8),
+      .limit(10),
     sb.from("applications").select("current_stage"),
+    sb
+      .from("applications")
+      .select("applied_at")
+      .gte("applied_at", sinceIso)
+      .order("applied_at", { ascending: true })
+      .limit(2000),
+    sb
+      .from("talent_pool_candidates")
+      .select("created_at")
+      .gte("created_at", sinceIso)
+      .order("created_at", { ascending: true })
+      .limit(2000),
+    sb.from("applications").select("platform"),
   ]);
 
-  for (const r of [apps, talents, postings, docs, recentApps, stageRows]) {
+  for (const r of [
+    apps,
+    talents,
+    postings,
+    docs,
+    recentApps,
+    stageRows,
+    appDates,
+    talentDates,
+    platformRows,
+  ]) {
     if (r.error) throw r.error;
   }
 
@@ -120,13 +181,22 @@ export async function getDashboardStats(sb) {
     byStage[k] = (byStage[k] || 0) + 1;
   }
 
+  const byPlatform = {};
+  for (const row of platformRows.data ?? []) {
+    const k = row.platform || "unknown";
+    byPlatform[k] = (byPlatform[k] || 0) + 1;
+  }
+
   return {
     applicants: apps.count ?? 0,
     talents: talents.count ?? 0,
     postings: postings.count ?? 0,
     documents: docs.count ?? 0,
     byStage,
+    byPlatform,
     recentApps: recentApps.data ?? [],
+    appsDaily: buildDailySeries(appDates.data ?? [], "applied_at", 14),
+    talentsDaily: buildDailySeries(talentDates.data ?? [], "created_at", 14),
   };
 }
 

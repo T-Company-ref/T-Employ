@@ -234,17 +234,31 @@ a:hover { text-decoration: underline; }
   top: 40%;
 }
 
-.dash-grid {
+.main-full {
+  grid-template-columns: 1fr;
+}
+.main-full .list-pane {
+  border-right: 0;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+}
+.dash-page { max-width: 1100px; margin: 0 auto; }
+.dash-kpis {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+@media (max-width: 900px) {
+  .dash-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 .dash-card {
   text-align: left;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 16px;
+  padding: 16px 18px;
   box-shadow: var(--shadow);
   cursor: pointer;
 }
@@ -252,35 +266,51 @@ a:hover { text-decoration: underline; }
 .dash-card:hover:not(.static) { border-color: #bfdbfe; }
 .dash-label { color: var(--muted); font-size: 0.85rem; margin-bottom: 6px; }
 .dash-num { font-size: 1.8rem; font-weight: 700; letter-spacing: -0.02em; }
-.stat-list { display: grid; gap: 8px; }
-.stat-row {
+.dash-charts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 14px;
+}
+@media (max-width: 900px) {
+  .dash-charts { grid-template-columns: 1fr; }
+}
+.chart-panel {
+  margin-bottom: 0;
+}
+.chart-panel h3 {
   display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 8px 10px;
-  background: var(--surface-2);
-  border-radius: 8px;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-size: 0.98rem;
+}
+.chart-sub { font-size: 0.8rem; font-weight: 400; }
+.chart-wrap {
+  position: relative;
+  height: 220px;
+}
+.chart-wrap-sm { height: 200px; }
+.dash-recent { margin-bottom: 24px; }
+.table-scroll { overflow-x: auto; }
+.dash-table {
+  width: 100%;
+  border-collapse: collapse;
   font-size: 0.9rem;
 }
-.recent-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 8px;
-}
-.recent-list .linkish {
-  width: 100%;
+.dash-table th,
+.dash-table td {
   text-align: left;
-  background: var(--surface-2);
-  border: 1px solid var(--line);
-  border-radius: 10px;
   padding: 10px 12px;
-  cursor: pointer;
-  display: grid;
-  gap: 4px;
+  border-bottom: 1px solid var(--line);
 }
-.recent-list .linkish:hover { border-color: #bfdbfe; }
+.dash-table th {
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 0.8rem;
+}
+.dash-row { cursor: pointer; }
+.dash-row:hover td { background: var(--brand-soft); }
 
 .toolbar {
   display: flex;
