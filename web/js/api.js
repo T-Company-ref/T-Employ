@@ -355,17 +355,51 @@ export async function setApplicationStage(sb, { applicationId, candidateId, stag
 }
 
 export async function listDocuments(sb, { candidateId, applicationId, talentPoolId } = {}) {
-  let query = sb
-    .from("candidate_documents")
-    .select("id, doc_type, file_url, file_hash, collected_at, application_id, talent_pool_id")
-    .order("collected_at", { ascending: false });
+  // application / talent 필터 + candidate 폴백을 합쳐서 보여준다
+  const rows = [];
+  const seen = new Set();
 
-  if (applicationId) query = query.eq("application_id", applicationId);
-  else if (talentPoolId) query = query.eq("talent_pool_id", talentPoolId);
-  else if (candidateId) query = query.eq("candidate_id", candidateId);
-  else return [];
+  const pushAll = (list) => {
+    for (const d of list ?? []) {
+      if (seen.has(d.id)) continue;
+      seen.add(d.id);
+      rows.push(d);
+    }
+  };
 
-  const { data, error } = await query;
-  if (error) throw error;
-  return data ?? [];
+  const select =
+    "id, doc_type, file_url, file_hash, collected_at, application_id, talent_pool_id, candidate_id";
+
+  if (applicationId) {
+    const { data, error } = await sb
+      .from("candidate_documents")
+      .select(select)
+      .eq("application_id", applicationId)
+      .order("collected_at", { ascending: false });
+    if (error) throw error;
+    pushAll(data);
+  }
+
+  if (talentPoolId) {
+    const { data, error } = await sb
+      .from("candidate_documents")
+      .select(select)
+      .eq("talent_pool_id", talentPoolId)
+      .order("collected_at", { ascending: false });
+    if (error) throw error;
+    pushAll(data);
+  }
+
+  if (candidateId) {
+    const { data, error } = await sb
+      .from("candidate_documents")
+      .select(select)
+      .eq("candidate_id", candidateId)
+      .order("collected_at", { ascending: false });
+    if (error) throw error;
+    pushAll(data);
+  }
+
+  rows.sort((a, b) => new Date(b.collected_at) - new Date(a.collected_at));
+  return rows;
 }

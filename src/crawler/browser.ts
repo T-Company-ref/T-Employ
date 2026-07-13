@@ -26,7 +26,8 @@ export interface BrowserSession {
 
 /**
  * Playwright 브라우저/컨텍스트를 생성한다.
- * 기존 storageState(암호화 전 단계: JSON 파일)가 있으면 재사용하여 로그인 회피.
+ * PDF(page.pdf) 는 Chromium headless 에서만 동작하므로
+ * CRAWL_FETCH_RESUMES=true 이면 headless 를 강제한다.
  */
 export async function openSession(
   platform: Platform,
@@ -36,7 +37,12 @@ export async function openSession(
   const statePath = sessionPath(platform, alias);
   const hasState = existsSync(statePath);
 
-  const browser = await chromium.launch({ headless: env.headless() });
+  const headless = env.headless() || env.crawlFetchResumes();
+  if (!env.headless() && env.crawlFetchResumes()) {
+    console.log('[browser] CRAWL_FETCH_RESUMES=true → headless 강제 (PDF 생성용)');
+  }
+
+  const browser = await chromium.launch({ headless });
   const context = await browser.newContext(
     hasState ? { storageState: statePath } : undefined,
   );
