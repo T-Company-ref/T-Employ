@@ -51,6 +51,27 @@ async function ensureCandidateIds(): Promise<number> {
   return linked;
 }
 
+/** active 인재 전체 (FORCE_REFETCH=1 이면 PDF 상태 무시) */
+async function listAllTalents(limit?: number): Promise<Target[]> {
+  const res = await query<Target>(
+    `SELECT t.id, t.candidate_id, t.profile_ref, t.profile_url, c.name, d.file_url
+     FROM talent_pool_candidates t
+     LEFT JOIN candidates c ON c.id = t.candidate_id
+     LEFT JOIN LATERAL (
+       SELECT file_url
+       FROM candidate_documents
+       WHERE talent_pool_id = t.id AND doc_type = 'resume'
+       ORDER BY collected_at DESC NULLS LAST
+       LIMIT 1
+     ) d ON true
+     WHERE t.is_active = true
+       AND t.profile_url IS NOT NULL
+     ORDER BY t.alerted_at DESC NULLS LAST, t.created_at DESC`,
+  );
+  const out = res.rows.filter((row) => row.candidate_id);
+  return limit != null && limit > 0 ? out.slice(0, limit) : out;
+}
+
 /** active 인재 전체에서 PDF 없음·깨짐·작은 파일 목록 (우선순위: alerted → created) */
 async function listBrokenTalents(limit?: number): Promise<Target[]> {
   const res = await query<Target>(
@@ -118,6 +139,7 @@ async function main() {
   process.env.CRAWL_FETCH_RESUMES = 'true';
   process.env.HEADLESS = process.env.HEADLESS || 'true';
   const maxItems = Number(process.env.CRAWL_MAX_ITEMS || '0'); // 0 = 제한 없음
+  const forceRefetch = process.env.FORCE_REFETCH === '1' || process.env.FORCE_REFETCH === 'true';
 
   const cleaned = await query(
     `UPDATE talent_pool_candidates
@@ -135,8 +157,10 @@ async function main() {
     `[fetch-talent-pdf] 현황 active=${before.total} ok=${before.ok} broken=${before.broken}`,
   );
 
-  const targets = await listBrokenTalents(maxItems > 0 ? maxItems : undefined);
-  console.log(`[fetch-talent-pdf] 대상 ${targets.length}명`);
+  const targets = forceRefetch
+    ? await listAllTalents(maxItems > 0 ? maxItems : undefined)
+    : await listBrokenTalents(maxItems > 0 ? maxItems : undefined);
+  console.log(`[fetch-talent-pdf] 대상 ${targets.length}명${forceRefetch ? ' (전체 재수집)' : ''}`);
   if (targets.length === 0) {
     console.log('[fetch-talent-pdf] 수집할 인재 없음');
     return;

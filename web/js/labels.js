@@ -26,6 +26,12 @@ export const PLATFORM_LABELS = {
   saramin: "사람인",
 };
 
+/** 목록·상세에서 텍스트 태그 대신 쓰는 플랫폼 아이콘 */
+export const PLATFORM_ICONS = {
+  jobkorea: { emoji: "💼", label: "잡코리아" },
+  saramin: { emoji: "👔", label: "사람인" },
+};
+
 export const TAG_LABELS = {
   recommend: "추천",
   watch: "관찰",
@@ -70,6 +76,12 @@ export function label(map, key, fallback = "—") {
 
 export function platformLabel(p) {
   return label(PLATFORM_LABELS, p, p || "—");
+}
+
+export function platformIcon(p, { large = false } = {}) {
+  const info = PLATFORM_ICONS[p] || { emoji: "📋", label: platformLabel(p) };
+  const cls = large ? "platform-icon platform-icon-lg" : "platform-icon";
+  return `<span class="${cls}" title="${info.label}" aria-label="${info.label}">${info.emoji}</span>`;
 }
 
 export function stageLabel(s) {
