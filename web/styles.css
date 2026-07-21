@@ -667,6 +667,50 @@ a.pdf-icon-btn:hover {
 }
 .search { min-width: 180px; flex: 1; }
 
+.list-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 12px;
+  margin-top: 18px;
+  padding: 12px 0 8px;
+  border-top: 1px solid var(--line);
+}
+.page-nums {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.page-num {
+  min-width: 34px;
+  height: 34px;
+  padding: 0 8px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+.page-num:hover { border-color: #bfdbfe; background: var(--brand-soft); }
+.page-num.active {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-weight: 700;
+}
+.page-info {
+  color: var(--muted);
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+.page-nav:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .card-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));

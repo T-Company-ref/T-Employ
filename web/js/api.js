@@ -252,17 +252,19 @@ export async function listApplications(sb, { q = "", platform = "", limit = 100 
   });
 }
 
-export async function listTalents(sb, { q = "", platform = "", limit = 100 } = {}) {
+export async function listTalents(sb, { q = "", platform = "", limit = 500 } = {}) {
   let query = sb
     .from("talent_pool_candidates")
     .select(
       `
       id, platform, profile_url, profile_ref, headline, summary_text, profile_meta,
-      search_condition, proposal_status, is_active, sourced_at,
+      search_condition, proposal_status, is_active, sourced_at, created_at,
       candidate:candidates ( id, name, email, phone, is_active )
     `,
     )
-    .order("sourced_at", { ascending: false })
+    .eq("is_active", true)
+    .order("sourced_at", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false })
     .limit(limit);
 
   if (platform) query = query.eq("platform", platform);

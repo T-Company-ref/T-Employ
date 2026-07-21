@@ -26,6 +26,8 @@ let rows = [];
 let selected = null;
 let filterQ = "";
 let filterPlatform = "";
+let listPage = 1;
+const PAGE_SIZE = 10;
 let toastTimer = null;
 let dashboardStats = null;
 
@@ -386,17 +388,114 @@ function bindListChrome() {
   document.getElementById("btn-refresh")?.addEventListener("click", () => refresh(false));
   document.getElementById("q")?.addEventListener("change", async (e) => {
     filterQ = e.target.value;
+    listPage = 1;
     await refresh(false);
   });
   document.getElementById("q")?.addEventListener("keydown", async (e) => {
     if (e.key === "Enter") {
       filterQ = e.target.value;
+      listPage = 1;
       await refresh(false);
     }
   });
   document.getElementById("platform")?.addEventListener("change", async (e) => {
     filterPlatform = e.target.value;
+    listPage = 1;
     await refresh(false);
+  });
+}
+
+function totalListPages() {
+  return Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+}
+
+function pageRows() {
+  const start = (listPage - 1) * PAGE_SIZE;
+  return rows.slice(start, start + PAGE_SIZE);
+}
+
+function clampListPage() {
+  listPage = Math.min(Math.max(1, listPage), totalListPages());
+}
+
+function syncListPageForSelection() {
+  if (!selected?.id || !rows.length) return;
+  const idx = rows.findIndex((r) => r.id === selected.id);
+  if (idx >= 0) listPage = Math.floor(idx / PAGE_SIZE) + 1;
+}
+
+function listTabTitle() {
+  return tab === "postings" ? "채용 공고" : tab === "applicants" ? "공고 지원자" : "인재검색";
+}
+
+function listCardsHtml() {
+  if (tab === "postings") return renderPostingCards();
+  if (tab === "applicants") return renderApplicantsCards();
+  return renderTalentCards();
+}
+
+function renderPagination() {
+  if (rows.length <= PAGE_SIZE) return "";
+  clampListPage();
+  const total = totalListPages();
+  const from = (listPage - 1) * PAGE_SIZE + 1;
+  const to = Math.min(listPage * PAGE_SIZE, rows.length);
+  const pages = [];
+  const windowStart = Math.max(1, listPage - 2);
+  const windowEnd = Math.min(total, listPage + 2);
+  for (let p = windowStart; p <= windowEnd; p++) {
+    pages.push(
+      `<button type="button" class="page-num ${p === listPage ? "active" : ""}" data-page="${p}">${p}</button>`,
+    );
+  }
+  return `<nav class="list-pagination" aria-label="페이지">
+    <button type="button" class="btn btn-ghost btn-sm page-nav" id="page-prev" ${listPage <= 1 ? "disabled" : ""}>이전</button>
+    <div class="page-nums">${pages.join("")}</div>
+    <span class="page-info">${from}–${to} / ${rows.length}</span>
+    <button type="button" class="btn btn-ghost btn-sm page-nav" id="page-next" ${listPage >= total ? "disabled" : ""}>다음</button>
+  </nav>`;
+}
+
+function listContentHtml() {
+  return `${listToolbar(listTabTitle())}${listCardsHtml()}${renderPagination()}`;
+}
+
+function paintListPane() {
+  const pane = document.getElementById("list-pane");
+  if (!pane) return;
+  pane.innerHTML = listContentHtml();
+  bindListChrome();
+  bindPagination();
+  bindCardSelection();
+  if (selected?.id) {
+    document.querySelector(`.candidate-card[data-id="${selected.id}"]`)?.classList.add("selected");
+  }
+}
+
+function bindPagination() {
+  document.getElementById("page-prev")?.addEventListener("click", async () => {
+    if (listPage <= 1) return;
+    listPage -= 1;
+    selected = null;
+    paintListPane();
+    await renderDetail();
+  });
+  document.getElementById("page-next")?.addEventListener("click", async () => {
+    if (listPage >= totalListPages()) return;
+    listPage += 1;
+    selected = null;
+    paintListPane();
+    await renderDetail();
+  });
+  document.querySelectorAll("[data-page]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const p = Number(btn.getAttribute("data-page"));
+      if (!p || p === listPage) return;
+      listPage = p;
+      selected = null;
+      paintListPane();
+      await renderDetail();
+    });
   });
 }
 
@@ -621,7 +720,7 @@ function mountDashboardCharts() {
 
 function renderPostingCards() {
   if (!rows.length) return `<div class="empty">등록된 공고가 없습니다.</div>`;
-  return `<div class="card-list">${rows
+  return `<div class="card-list">${pageRows()
     .map((r) => {
       const sel = selected?.id === r.id ? "selected" : "";
       const meta = r.meta || {};
@@ -647,7 +746,7 @@ function renderApplicantsCards() {
   if (!rows.length) {
     return `<div class="empty">지원자가 없습니다. 크롤 수집 후 새로고침하세요.</div>`;
   }
-  return `<div class="card-list">${rows
+  return `<div class="card-list">${pageRows()
     .map((r) => {
       const sel = selected?.id === r.id ? "selected" : "";
       const meta = r.profile_meta || {};
@@ -694,7 +793,7 @@ function renderApplicantsCards() {
 
 function renderTalentCards() {
   if (!rows.length) return `<div class="empty">인재검색 후보가 없습니다.</div>`;
-  return `<div class="card-list">${rows
+  return `<div class="card-list">${pageRows()
     .map((r) => {
       const sel = selected?.id === r.id ? "selected" : "";
       const meta = r.profile_meta || {};
@@ -1292,7 +1391,10 @@ function bindCardSelection() {
 }
 
 async function refresh(resetSelection = true) {
-  if (resetSelection) selected = null;
+  if (resetSelection) {
+    selected = null;
+    listPage = 1;
+  }
   const keepId = selected?.id;
 
   if (tab === "dashboard") {
@@ -1328,28 +1430,23 @@ async function refresh(resetSelection = true) {
   destroyDashCharts();
 
   if (tab === "postings") {
-    rows = await api.listPostings(sb, { q: filterQ, platform: filterPlatform });
+    rows = await api.listPostings(sb, { q: filterQ, platform: filterPlatform, limit: 500 });
   } else if (tab === "applicants") {
-    rows = await api.listApplications(sb, { q: filterQ, platform: filterPlatform });
+    rows = await api.listApplications(sb, { q: filterQ, platform: filterPlatform, limit: 500 });
   } else {
-    rows = await api.listTalents(sb, { q: filterQ, platform: filterPlatform });
+    rows = await api.listTalents(sb, { q: filterQ, platform: filterPlatform, limit: 500 });
   }
 
   if (keepId) selected = rows.find((r) => r.id === keepId) || null;
-
-  const title = tab === "postings" ? "채용 공고" : tab === "applicants" ? "공고 지원자" : "인재검색";
-  const cards =
-    tab === "postings"
-      ? renderPostingCards()
-      : tab === "applicants"
-        ? renderApplicantsCards()
-        : renderTalentCards();
+  if (selected) syncListPageForSelection();
+  clampListPage();
 
   shell(
-    `${listToolbar(title)}${cards}`,
+    listContentHtml(),
     `<div class="empty detail-empty">목록에서 항목을 선택하세요.</div>`,
   );
   bindListChrome();
+  bindPagination();
   bindCardSelection();
 
   if (selected) {
