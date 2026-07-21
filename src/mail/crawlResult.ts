@@ -91,6 +91,23 @@ function tagHtml(tags: string[] | undefined): string {
     .join('')}</div>`;
 }
 
+/** 프로필 링크(좌) + PDF 이모지(우) */
+function profilePdfActions(
+  profileUrl: string | null | undefined,
+  pdfUrl: string | null | undefined,
+): string {
+  const profile = profileUrl
+    ? `<a href="${esc(profileUrl)}" style="color:#374151;font-weight:600;text-decoration:none">${tw(EMOJI.link, '프로필', 14)} 프로필 ↗</a>`
+    : `<span style="color:#9ca3af">프로필 없음</span>`;
+  const pdf = pdfUrl
+    ? `<a href="${esc(pdfUrl)}" style="font-size:18px;line-height:1;text-decoration:none" title="이력서 PDF">${tw(EMOJI.page, 'PDF', 16)}</a>`
+    : `<span style="opacity:0.35;font-size:18px;line-height:1" title="PDF 없음">${tw(EMOJI.page, '', 16)}</span>`;
+  return `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:10px">
+    <span>${profile}</span>
+    <span>${pdf}</span>
+  </div>`;
+}
+
 function applicantCards(items: ApplicantAlertRow[]): string {
   if (items.length === 0) {
     return `<tr><td style="padding:12px 10px;color:#6b7280">해당 지원자 없음</td></tr>`;
@@ -100,12 +117,6 @@ function applicantCards(items: ApplicantAlertRow[]): string {
     items
       .slice(0, 40)
       .map((item) => {
-        const pdfCell = item.pdfUrl
-          ? `<a href="${esc(item.pdfUrl)}" style="color:#2563eb;font-weight:600;text-decoration:none">${tw(EMOJI.page, 'PDF', 14)} PDF</a>`
-          : `<span style="color:#9ca3af">${tw(EMOJI.page, '', 14)} 없음</span>`;
-        const detail = item.detailUrl
-          ? ` &nbsp;<a href="${esc(item.detailUrl)}" style="color:#6b7280;text-decoration:none">${tw(EMOJI.link, '링크', 14)}</a>`
-          : '';
         const careerBits = (item.careerHistory || []).slice(0, 2).join(' / ');
 
         return `<tr>
@@ -130,7 +141,7 @@ function applicantCards(items: ApplicantAlertRow[]): string {
         </td>
         <td style="padding:14px 12px;border-bottom:1px solid #e5e7eb;vertical-align:top;white-space:nowrap;text-align:right">
           <div style="font-size:13px">${tw(EMOJI.calendar, '', 14)} ${fmtDate(item.appliedAt)}</div>
-          <div style="margin-top:10px">${pdfCell}${detail}</div>
+          ${profilePdfActions(item.detailUrl, item.pdfUrl)}
         </td>
       </tr>`;
       })
@@ -408,12 +419,6 @@ function talentCards(items: TalentAlertRow[]): string {
   }
   return items
     .map((item) => {
-      const pdf = item.pdfUrl
-        ? `<a href="${esc(item.pdfUrl)}" style="color:#2563eb;font-weight:600;text-decoration:none">${tw(EMOJI.page, 'PDF', 14)} PDF</a>`
-        : `<span style="color:#9ca3af">${tw(EMOJI.page, '', 14)} 없음</span>`;
-      const profile = item.profileUrl
-        ? ` &nbsp;<a href="${esc(item.profileUrl)}" style="color:#6b7280;text-decoration:none">${tw(EMOJI.link, '프로필', 14)}</a>`
-        : '';
       const roles = (item.roles || []).slice(0, 3).map(cleanDisplayText).filter(Boolean).join(' · ');
       const skills = (item.skills || []).slice(0, 6).map(cleanDisplayText).filter(Boolean).join(', ');
       const headline = cleanDisplayText(item.headline).slice(0, 120);
@@ -435,7 +440,7 @@ function talentCards(items: TalentAlertRow[]): string {
         </td>
         <td style="padding:14px 12px;border-bottom:1px solid #e5e7eb;vertical-align:top;white-space:nowrap;text-align:right">
           <div style="font-size:13px">${tw(EMOJI.calendar, '', 14)} ${fmtDate(item.sourcedAt)}</div>
-          <div style="margin-top:10px">${pdf}${profile}</div>
+          ${profilePdfActions(item.profileUrl, item.pdfUrl)}
         </td>
       </tr>`;
     })

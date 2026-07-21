@@ -75,32 +75,21 @@ function renderChips(items, cls = "skill-chip") {
 }
 
 function renderDocuments(docs) {
-  if (!docs?.length) {
-    return `<div class="doc-empty">
-      <span class="doc-empty-icon">📄</span>
-      <p>저장된 이력서가 없습니다</p>
-      <span class="muted">크롤 시 PDF 수집 후 표시됩니다</span>
-    </div>`;
-  }
-  return `<ul class="doc-list">${docs
-    .map((d) => {
-      const canOpen = d.file_url && !d.file_url.startsWith("file://");
-      return `<li class="doc-item">
-        <div class="doc-item-main">
-          <span class="doc-item-icon">📄</span>
-          <div>
-            <div class="doc-item-title">이력서 PDF</div>
-            <div class="doc-item-date">${esc(new Date(d.collected_at).toLocaleDateString("ko-KR"))} 수집</div>
-          </div>
-        </div>
-        ${
-          canOpen
-            ? `<a class="btn btn-primary btn-sm" href="${esc(d.file_url)}" target="_blank" rel="noopener">열기</a>`
-            : `<span class="muted">로컬 저장</span>`
-        }
-      </li>`;
-    })
-    .join("")}</ul>`;
+  const pdf = docs?.find((d) => d.file_url && !d.file_url.startsWith("file://"));
+  if (!pdf) return "";
+  const date = new Date(pdf.collected_at).toLocaleDateString("ko-KR");
+  return `<p class="doc-meta muted">${esc(date)} 수집</p>`;
+}
+
+function renderProfileLinkRow(profileUrl, docs) {
+  const pdf = docs?.find((d) => d.file_url && !d.file_url.startsWith("file://"));
+  const profileLink = profileUrl
+    ? `<a class="profile-origin-link" href="${esc(profileUrl)}" target="_blank" rel="noopener">잡코리아 프로필 ↗</a>`
+    : `<span class="muted">프로필 링크 없음</span>`;
+  const pdfBtn = pdf
+    ? `<a class="pdf-icon-btn" href="${esc(pdf.file_url)}" target="_blank" rel="noopener" title="이력서 PDF">📄</a>`
+    : `<span class="pdf-icon-btn is-disabled" title="PDF 없음">📄</span>`;
+  return `<div class="profile-link-row">${profileLink}${pdfBtn}</div>`;
 }
 
 function renderConfigMissing() {
@@ -865,15 +854,20 @@ async function renderApplicantDetail(pane) {
       { icon: "📞" },
     ),
     detailSection(
+      "프로필",
+      `${renderProfileLinkRow(meta.detailUrl, docs)}${renderDocuments(docs)}`,
+      { icon: "🔗" },
+    ),
+    detailSection(
       "공고",
       infoRows([
         ["공고명", esc(r.posting?.title || "공고명 미수집")],
         ["공고번호", esc(postingMeta.postingNumber || r.posting?.external_posting_id || "—")],
         ["담당자", esc(postingMeta.manager || "—")],
         [
-          "원본 링크",
+          "공고 보기",
           r.posting?.source_url
-            ? `<a href="${esc(r.posting.source_url)}" target="_blank" rel="noopener">잡코리아에서 보기 ↗</a>`
+            ? `<a href="${esc(r.posting.source_url)}" target="_blank" rel="noopener">잡코리아 공고 ↗</a>`
             : "—",
         ],
       ]),
@@ -881,16 +875,14 @@ async function renderApplicantDetail(pane) {
     ),
   ].join("");
 
-  const docsHtml = `
-    ${renderDocuments(docs)}
-    ${
-      caps().canRecommend
-        ? `<div class="detail-actions">
-            <button type="button" class="btn btn-primary" id="btn-recommend">추천하기</button>
-            <span class="muted detail-hint">별명 <b>${esc(staff?.nickname || "")}</b>으로 표시</span>
-          </div>`
-        : ""
-    }`;
+  const docsHtml = `${
+    caps().canRecommend
+      ? `<div class="detail-actions">
+          <button type="button" class="btn btn-primary" id="btn-recommend">추천하기</button>
+          <span class="muted detail-hint">별명 <b>${esc(staff?.nickname || "")}</b>으로 표시</span>
+        </div>`
+      : `<p class="muted empty-inline">이력서 PDF는 프로필 링크 우측 📄 아이콘으로 열 수 있습니다.</p>`
+  }`;
 
   const tagsHtml = `
     ${renderTagChips(tags, { canRemove: true })}
@@ -1163,28 +1155,19 @@ async function renderTalentDetail(pane) {
     renderChips(meta.badges, "badge-chip"),
     detailSection(
       "프로필",
-      infoRows([
-        [
-          "원본 링크",
-          r.profile_url
-            ? `<a href="${esc(r.profile_url)}" target="_blank" rel="noopener">잡코리아에서 보기 ↗</a>`
-            : "—",
-        ],
-      ]),
+      `${renderProfileLinkRow(r.profile_url, docs)}${renderDocuments(docs)}`,
       { icon: "🔗" },
     ),
   ].join("");
 
-  const docsHtml = `
-    ${renderDocuments(docs)}
-    ${
-      caps().canRecommend
-        ? `<div class="detail-actions">
-            <button type="button" class="btn btn-primary" id="btn-recommend">추천하기</button>
-            <span class="muted detail-hint">별명 <b>${esc(staff?.nickname || "")}</b></span>
-          </div>`
-        : ""
-    }`;
+  const docsHtml = `${
+    caps().canRecommend
+      ? `<div class="detail-actions">
+          <button type="button" class="btn btn-primary" id="btn-recommend">추천하기</button>
+          <span class="muted detail-hint">별명 <b>${esc(staff?.nickname || "")}</b></span>
+        </div>`
+      : `<p class="muted empty-inline">이력서 PDF는 프로필 링크 우측 📄 아이콘으로 열 수 있습니다.</p>`
+  }`;
 
   const tagsHtml = `
     ${renderTagChips(tags, { canRemove: true })}
