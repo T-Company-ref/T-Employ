@@ -25,7 +25,7 @@ export async function getMyStaff(sb) {
 
   const { data, error } = await sb
     .from("staff_profiles")
-    .select("id, nickname, display_name, email, role, is_active, auth_user_id")
+    .select("id, nickname, display_name, email, role, is_active, auth_user_id, notify_pref")
     .eq("auth_user_id", user.id)
     .maybeSingle();
   if (error) throw error;
@@ -40,10 +40,27 @@ export async function getMyStaff(sb) {
     display_name: user.email,
     email: user.email,
     role: "viewer",
+    notify_pref: "none",
     is_active: true,
     auth_user_id: user.id,
     _unlinked: true,
   };
+}
+
+/** 본인 프로필: 별명·표시명·알림 설정 (역할 변경 불가) */
+export async function updateMyStaffProfile(sb, staffId, { nickname, displayName, notifyPref }) {
+  const patch = {};
+  if (nickname != null) patch.nickname = String(nickname).trim();
+  if (displayName != null) patch.display_name = String(displayName).trim();
+  if (notifyPref != null) patch.notify_pref = notifyPref;
+  const { data, error } = await sb
+    .from("staff_profiles")
+    .update(patch)
+    .eq("id", staffId)
+    .select("id, nickname, display_name, email, role, is_active, auth_user_id, notify_pref")
+    .single();
+  if (error) throw error;
+  return data;
 }
 
 export async function listPostings(sb, { q = "", platform = "", limit = 100 } = {}) {

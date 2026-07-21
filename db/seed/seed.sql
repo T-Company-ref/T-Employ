@@ -38,10 +38,11 @@ ON CONFLICT (nickname) DO UPDATE SET
   display_name = EXCLUDED.display_name,
   role = EXCLUDED.role;
 
-INSERT INTO staff_profiles (nickname, display_name, email, role)
+-- 추천자(recommender): 추천 태그 가능, 블락/삭제 불가. 알림은 웹 설정(notify_pref)
+INSERT INTO staff_profiles (nickname, display_name, email, role, notify_pref)
 VALUES
-  ('jonghyuk.kim', '김종혁', 'jonghyuk.kim@tbell.co.kr', 'viewer'),
-  ('hj.joo', '주현진', 'hj.joo@tbell.co.kr', 'viewer')
+  ('jonghyuk.kim', '김종혁', 'jonghyuk.kim@tbell.co.kr', 'recommender', 'digest'),
+  ('hj.joo', '주호정', 'hj.joo@tbell.co.kr', 'recommender', 'digest')
 ON CONFLICT (nickname) DO UPDATE SET
   email = EXCLUDED.email,
   display_name = EXCLUDED.display_name,

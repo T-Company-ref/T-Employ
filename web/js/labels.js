@@ -32,6 +32,23 @@ export const TAG_LABELS = {
   flag: "주의",
 };
 
+/** staff_profiles.role */
+export const ROLE_LABELS = {
+  operator: "운영자",
+  recruiter: "채용담당",
+  executive: "임원",
+  recommender: "추천자",
+  viewer: "조회자",
+  staff: "직원",
+};
+
+/** staff_profiles.notify_pref */
+export const NOTIFY_PREF_LABELS = {
+  none: "알림 안 받음",
+  digest: "아침 다이제스트만 (07:30)",
+  realtime: "실시간 알림",
+};
+
 export const MEETING_LABELS = {
   onsite: "대면",
   online: "화상",
@@ -61,4 +78,25 @@ export function stageLabel(s) {
 
 export function proposalLabel(s) {
   return label(PROPOSAL_STATUS_LABELS, s, s || "—");
+}
+
+export function roleLabel(r) {
+  return label(ROLE_LABELS, r, r || "—");
+}
+
+export function notifyPrefLabel(p) {
+  return label(NOTIFY_PREF_LABELS, p, p || "—");
+}
+
+/** 역할별 UI 권한 */
+export function staffCaps(role) {
+  const r = role || "viewer";
+  const manage = r === "operator" || r === "recruiter";
+  const recommend = manage || r === "recommender" || r === "executive";
+  return {
+    canRecommend: recommend,
+    canTagExtra: manage, // 관찰/주의 등
+    canManagePipeline: manage, // 단계·면접·블락
+    canBlock: manage,
+  };
 }

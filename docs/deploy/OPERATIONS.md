@@ -3,7 +3,8 @@
 현재 기본 경로: **Actions 배치**. Oracle VM은 선택 사항입니다.
 
 상세 스케줄·Secrets: [GITHUB_ACTIONS.md](./GITHUB_ACTIONS.md)  
-세션 복구: [SESSION_RECOVERY.md](./SESSION_RECOVERY.md)
+세션 복구: [SESSION_RECOVERY.md](./SESSION_RECOVERY.md)  
+직원 역할·알림: [ROLES.md](./ROLES.md)
 
 ## 일상 흐름 (평일)
 

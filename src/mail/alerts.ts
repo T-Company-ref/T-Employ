@@ -1,10 +1,10 @@
-import { env } from '../config/env.js';
 import { sendHtmlMail } from './transport.js';
+import { resolveMailRecipients } from './recipients.js';
 
-/** 운영자(yj.kim@tbell.co.kr 등)에게 경고/실패 알림 */
+/** 운영자 경고/실패 알림 (인증 오류 등) */
 export async function sendOpsAlert(subject: string, html: string): Promise<void> {
   await sendHtmlMail({
-    to: env.actionNotifyEmails(),
+    to: await resolveMailRecipients('ops'),
     subject,
     html,
     allowDryRun: false,

@@ -1,5 +1,5 @@
-import { env } from '../config/env.js';
 import { sendHtmlMail } from '../mail/transport.js';
+import { resolveMailRecipients } from '../mail/recipients.js';
 
 function runUrl(): string {
   const server = process.env.GITHUB_SERVER_URL ?? 'https://github.com';
@@ -28,7 +28,7 @@ async function main(): Promise<void> {
   const branch = process.env.GITHUB_REF_NAME ?? process.env.GITHUB_REF ?? '';
   const sha = (process.env.GITHUB_SHA ?? '').slice(0, 7);
   const actor = process.env.GITHUB_ACTOR ?? 'local';
-  const to = env.actionNotifyEmails();
+  const to = await resolveMailRecipients('ops');
 
   const subject = `[TBELL Employ Actions] ${workflow} — ${conclusion}`;
   const html = `<!DOCTYPE html><html lang="ko"><body style="font-family:Segoe UI,Arial,sans-serif;color:#1f2937">

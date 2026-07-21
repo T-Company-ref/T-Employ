@@ -10,7 +10,7 @@
 import { closePool, query } from '../db/client.js';
 import { env } from '../config/env.js';
 
-type Role = 'operator' | 'recruiter' | 'executive' | 'viewer' | 'staff';
+type Role = 'operator' | 'recruiter' | 'executive' | 'viewer' | 'staff' | 'recommender';
 
 type UserSpec = {
   email: string;
@@ -22,8 +22,7 @@ type UserSpec = {
 
 function parseArgs(): UserSpec[] {
   const args = process.argv.slice(2);
-  if (args.includes('--batch-viewers')) {
-    // 일회성: 환경변수로 비밀번호 전달 (로그에 찍지 않음)
+  if (args.includes('--batch-viewers') || args.includes('--batch-recommenders')) {
     const p1 = process.env.VIEWER_PASS_JONGHYUK ?? '';
     const p2 = process.env.VIEWER_PASS_HJJOO ?? '';
     if (!p1 || !p2) {
@@ -35,14 +34,14 @@ function parseArgs(): UserSpec[] {
         password: p1,
         nickname: 'jonghyuk.kim',
         displayName: '김종혁',
-        role: 'viewer',
+        role: 'recommender',
       },
       {
         email: 'hj.joo@tbell.co.kr',
         password: p2,
         nickname: 'hj.joo',
-        displayName: '주현진',
-        role: 'viewer',
+        displayName: '주호정',
+        role: 'recommender',
       },
     ];
   }

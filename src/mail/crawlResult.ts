@@ -1,4 +1,3 @@
-import { env } from '../config/env.js';
 import type { RunResult } from '../crawler/runner.js';
 import {
   loadApplicantAlertDetails,
@@ -10,6 +9,7 @@ import {
   type TalentAlertRow,
 } from '../db/repositories/talentAlerts.js';
 import { sendHtmlMail } from './transport.js';
+import { resolveMailRecipients } from './recipients.js';
 import {
   isRealtimeNotifyWindow,
   splitRealtimeAndDeferred,
@@ -176,8 +176,13 @@ async function sendApplicantListMail(params: {
   introHtml: string;
   items: Array<{ applicationId: string } & Partial<ApplicantAlertRow>>;
   markIds?: string[];
+  channel?: 'realtime' | 'digest';
 }): Promise<void> {
-  const to = env.actionNotifyEmails();
+  const to = await resolveMailRecipients(params.channel ?? 'realtime');
+  if (to.length === 0) {
+    console.log('[mail/crawl] 수신자 없음 — 발송 생략');
+    return;
+  }
   const enriched = await resolveMailItems(params.items);
   const html = `<!DOCTYPE html><html lang="ko"><body style="margin:0;padding:16px;background:#f8fafc;font-family:Segoe UI,Apple SD Gothic Neo,Malgun Gothic,Arial,sans-serif;color:#1f2937;line-height:1.5">
   <div style="max-width:720px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;padding:20px 18px">
@@ -212,15 +217,15 @@ export async function sendApplicantCrawlResultMail(results: RunResult[]): Promis
   const updated = results.reduce((n, r) => n + (r.updated ?? 0), 0);
   const resumes = results.reduce((n, r) => n + (r.resumesSaved ?? 0), 0);
   const newItems = results.flatMap((r) => r.newItems ?? []);
-  const to = env.actionNotifyEmails();
   const now = new Date();
 
   if (failed.length > 0) {
     const detail = failed
       .map((f) => `<li><b>${esc(f.platform)}</b>: ${esc(f.error || '')}</li>`)
       .join('');
+    const opsTo = await resolveMailRecipients('ops');
     await sendHtmlMail({
-      to,
+      to: opsTo,
       subject: `[TBELL] 크롤 실패 · ${failed.map((f) => f.platform).join(', ')}`,
       html: `<!DOCTYPE html><html lang="ko"><body style="font-family:Segoe UI,Arial,sans-serif;color:#1f2937;padding:16px">
         <h2 style="color:#dc2626">${tw(EMOJI.warning, '', 20)} 지원자 크롤 실패</h2>
@@ -229,7 +234,7 @@ export async function sendApplicantCrawlResultMail(results: RunResult[]): Promis
       </body></html>`,
       allowDryRun: true,
     });
-    console.log(`[mail/crawl] 실패 알림 → ${to.join(', ')}`);
+    console.log(`[mail/crawl] 실패 알림 → ${opsTo.join(', ')}`);
   }
 
   if (newItems.length === 0) {
@@ -253,6 +258,7 @@ export async function sendApplicantCrawlResultMail(results: RunResult[]): Promis
       introHtml: rangeIntro(start, now, weekendCatchUp.length),
       items: weekendCatchUp,
       markIds: weekendCatchUp.map((i) => i.applicationId),
+      channel: 'digest',
     });
   }
 
@@ -266,6 +272,7 @@ export async function sendApplicantCrawlResultMail(results: RunResult[]): Promis
       introHtml: `<p style="margin:0 0 14px;font-size:14px;color:#374151">${tw(EMOJI.calendar, '', 18)} <b>${esc(fmtKstDateTime(now))}</b> 기준 신규 지원 이력입니다. <span style="color:#6b7280">(${realtimeOnly.length}명)</span></p>`,
       items: realtimeOnly,
       markIds: realtimeOnly.map((i) => i.applicationId),
+      channel: 'realtime',
     });
   } else if (deferred.length > weekendCatchUp.length) {
     console.log(
@@ -308,7 +315,11 @@ export async function sendCombinedDigestMail(
     사이 지원자 ${applicants.length}명 · 추천 인재 ${talents.length}명
   </p>`;
 
-  const to = env.actionNotifyEmails();
+  const to = await resolveMailRecipients('digest');
+  if (to.length === 0) {
+    console.log('[mail/crawl] 다이제스트 수신자 없음 — 발송 생략');
+    return;
+  }
   const enrichedApplicants = await resolveMailItems(applicants);
 
   const html = `<!DOCTYPE html><html lang="ko"><body style="margin:0;padding:16px;background:#f8fafc;font-family:Segoe UI,Apple SD Gothic Neo,Malgun Gothic,Arial,sans-serif;color:#1f2937;line-height:1.5">
@@ -444,7 +455,11 @@ export async function sendDigestTalentMail(
   const a = toKstParts(options.start);
   const b = toKstParts(options.end);
   const range = `${a.month}/${a.day} ${pad(a.hour)}:${pad(a.minute)}–${b.month}/${b.day} ${pad(b.hour)}:${pad(b.minute)}`;
-  const to = env.actionNotifyEmails();
+  const to = await resolveMailRecipients('digest');
+  if (to.length === 0) {
+    console.log('[mail/crawl] 인재 알림 수신자 없음 — 발송 생략');
+    return;
+  }
 
   const html = `<!DOCTYPE html><html lang="ko"><body style="margin:0;padding:16px;background:#f8fafc;font-family:Segoe UI,Apple SD Gothic Neo,Malgun Gothic,Arial,sans-serif;color:#1f2937;line-height:1.5">
   <div style="max-width:720px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;padding:20px 18px">
