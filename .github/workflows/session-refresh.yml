@@ -1,18 +1,18 @@
 name: session-refresh
 
-# ?¸ì…˜ ê°±ì‹  ??ë§¤ì›” 1??KST 1??06:30) + ?˜ë™. Playwright ?„ìš”.
+# Session refresh ? monthly (KST day 01 06:30) + manual. Playwright required.
 on:
   schedule:
-    # ë§¤ì¼ 21:30 UTC (= 06:30 KST) ??gate ?ì„œ KST 1?¼ë§Œ ë³??‘ì—… ?¤í–‰
+    # Daily 21:30 UTC (= 06:30 KST); gate job runs only on KST day 01
     - cron: "30 21 * * *"
   workflow_dispatch:
     inputs:
       platform:
-        description: "?¸ì…˜ ?¬ë°œê¸??€??
+        description: "Platform to refresh"
         required: true
         default: "jobkorea"
       notify_ok:
-        description: "?±ê³µ ?œì—??ë©”ì¼ (true/false)"
+        description: "Email on success (true/false)"
         required: false
         default: "true"
 
@@ -42,7 +42,7 @@ jobs:
             echo "should_run=true" >> "$GITHUB_OUTPUT"
           else
             echo "should_run=false" >> "$GITHUB_OUTPUT"
-            echo "Not the 1st KST ??skip monthly session refresh"
+            echo "Not the 1st KST ? skip monthly session refresh"
           fi
 
   refresh:

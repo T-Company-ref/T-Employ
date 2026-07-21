@@ -1,18 +1,18 @@
 name: crawl-talent
 
-# ?¸ì¬ ëª©ë¡ ?˜ì§‘ ??Playwright ?„ìš”. ?‰ì¼ 1??(07:07 KST)
+# Talent pool crawl ? Playwright. Weekday once (07:07 KST)
 on:
   schedule:
-    # 07:07 KST Mon?“Fri = 22:07 UTC Sun?“Thu
+    # 07:07 KST Mon-Fri = 22:07 UTC Sun-Thu
     - cron: "7 22 * * 0-4"
   workflow_dispatch:
     inputs:
       platform:
-        description: "?Œë«??(ê¸°ë³¸ jobkorea)"
+        description: "Platform (default jobkorea)"
         required: false
         default: "jobkorea"
       limit:
-        description: "ìµœë? ?˜ì§‘ ê±´ìˆ˜"
+        description: "Max items"
         required: false
         default: "20"
 

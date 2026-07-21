@@ -1,21 +1,21 @@
 name: poll-applicants
 
-# ê²½ëŸ‰ ì§€?ì ?´ë§ ??Playwright/Chromium ?¤ì¹˜ ê¸ˆì?
-# KST ?‰ì¼ 08:17~19:17 ë§¤ì‹œ (UTC cron)
+# Lightweight applicant poll ? no Playwright/Chromium
+# KST weekdays 08:17-19:17 hourly (UTC cron)
 on:
   schedule:
-    # 08:17 KST Mon?“Fri = 23:17 UTC Sun?“Thu
+    # 08:17 KST Mon-Fri = 23:17 UTC Sun-Thu
     - cron: "17 23 * * 0-4"
-    # 09:17??9:17 KST Mon?“Fri = 00:17??0:17 UTC Mon?“Fri
+    # 09:17-19:17 KST Mon-Fri = 00:17-10:17 UTC Mon-Fri
     - cron: "17 0-10 * * 1-5"
   workflow_dispatch:
     inputs:
       limit:
-        description: "ìµœë? ?˜ì§‘ ê±´ìˆ˜"
+        description: "Max applicants to fetch"
         required: false
         default: "50"
       dry_run:
-        description: "true ë©?DB ?€??ë©”ì¼ ?†ìŒ"
+        description: "true = no DB write / no mail"
         required: false
         default: "false"
 
