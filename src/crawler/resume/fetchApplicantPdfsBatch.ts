@@ -45,13 +45,22 @@ async function listTargets(options: {
             d.file_url
      FROM applications a
      LEFT JOIN candidates c ON c.id = a.candidate_id
-     LEFT JOIN candidate_documents d
-       ON d.application_id = a.id AND d.doc_type = 'resume'
+     LEFT JOIN LATERAL (
+       SELECT file_url
+       FROM candidate_documents
+       WHERE application_id = a.id AND doc_type = 'resume'
+       ORDER BY collected_at DESC NULLS LAST
+       LIMIT 1
+     ) d ON true
      WHERE a.platform = 'jobkorea'
+       AND a.is_active = true
        AND ($1::text IS NULL OR a.external_ref = $1)
-     ORDER BY a.applied_at DESC NULLS LAST
-     LIMIT 200`,
-    [options.onlyRef ?? null],
+       AND (
+         ($2::boolean = false AND (d.file_url IS NULL OR d.file_url NOT LIKE 'http%'))
+         OR $2::boolean = true
+       )
+     ORDER BY a.applied_at DESC NULLS LAST`,
+    [options.onlyRef ?? null, Boolean(options.repairInvalid)],
   );
 
   const out: ApplicantPdfTarget[] = [];
@@ -62,7 +71,7 @@ async function listTargets(options: {
       const bytes = await pdfBytesFromUrl(row.file_url);
       if (bytes === null || bytes < MIN_RESUME_PDF_BYTES) out.push(row);
     }
-    if (options.limit && out.length >= options.limit) break;
+    if (options.limit != null && options.limit > 0 && out.length >= options.limit) break;
   }
   return out;
 }

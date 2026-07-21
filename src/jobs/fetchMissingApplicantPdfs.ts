@@ -13,7 +13,6 @@ import { handleAuthFailure } from '../mail/sessionAuthAlert.js';
 import { markSessionOk } from '../crawler/session/authState.js';
 import { assertScheduledAutomationAllowed } from '../crawler/crawlPolicy.js';
 import { runFetchApplicantPdfs } from '../crawler/resume/fetchApplicantPdfsBatch.js';
-import { env } from '../config/env.js';
 
 function parseLimit(): number | undefined {
   const idx = process.argv.indexOf('--limit');
@@ -23,6 +22,7 @@ function parseLimit(): number | undefined {
   }
   const fromEnv = Number(process.env.PDF_MAX_ITEMS || '');
   if (!Number.isNaN(fromEnv) && fromEnv > 0) return fromEnv;
+  if (process.env.PDF_MAX_ITEMS === '0') return undefined;
   return undefined;
 }
 
@@ -33,7 +33,7 @@ async function main(): Promise<void> {
 
   const onlyRef = process.argv.find((a) => a.startsWith('--ref='))?.split('=')[1];
   const repairInvalid = process.argv.includes('--repair') || Boolean(onlyRef);
-  const limit = parseLimit() ?? Math.min(env.crawlMaxItems(), 15);
+  const limit = parseLimit();
 
   try {
     const result = await runFetchApplicantPdfs({
