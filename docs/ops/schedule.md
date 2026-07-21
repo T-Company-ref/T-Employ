@@ -26,7 +26,8 @@
 HEADLESS=true
 AUTO_CRAWL_ENABLED=true   # Actions schedule / Oracle 타이머
 CRAWL_MAX_ITEMS=50
-PDF_MAX_ITEMS=15
+TALENT_CRAWL_MAX_ITEMS=5
+PDF_MAX_ITEMS=5
 DIGEST_SKIP_BROWSER=true  # 다이제스트에서 Playwright 생략
 ```
 

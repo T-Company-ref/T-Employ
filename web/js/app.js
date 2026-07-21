@@ -515,14 +515,18 @@ function bindPagination() {
   });
 }
 
+let dashTrendMode = "apps"; // apps | talents
+
 function renderDashboard() {
   const s = dashboardStats || {
     applicants: 0,
     talents: 0,
     postings: 0,
     documents: 0,
-    byStage: {},
-    byPlatform: {},
+    applicantsYesterday: 0,
+    applicantsThisWeek: 0,
+    yesterdayLabel: "",
+    weekLabel: "",
     recentApps: [],
     appsDaily: { labels: [], values: [] },
     talentsDaily: { labels: [], values: [] },
@@ -539,6 +543,8 @@ function renderDashboard() {
     )
     .join("");
 
+  const trendTitle = dashTrendMode === "talents" ? "일별 인재검색 추이" : "일별 지원 추이";
+
   return `
     <div class="dash-page">
       <div class="toolbar">
@@ -547,38 +553,36 @@ function renderDashboard() {
       </div>
       <div class="dash-kpis">
         <button type="button" class="dash-card" data-jump="applicants">
-          <div class="dash-label">지원자</div>
-          <div class="dash-num">${s.applicants}</div>
+          <div class="dash-label">어제 지원자</div>
+          <div class="dash-num">${s.applicantsYesterday ?? 0}</div>
+          <div class="dash-sub muted">${esc(s.yesterdayLabel || "전일")}</div>
+        </button>
+        <button type="button" class="dash-card" data-jump="applicants">
+          <div class="dash-label">이번주 지원자</div>
+          <div class="dash-num">${s.applicantsThisWeek ?? 0}</div>
+          <div class="dash-sub muted">${esc(s.weekLabel || "월–오늘")}</div>
         </button>
         <button type="button" class="dash-card" data-jump="talent">
           <div class="dash-label">인재검색</div>
           <div class="dash-num">${s.talents}</div>
+          <div class="dash-sub muted">누적</div>
         </button>
         <button type="button" class="dash-card" data-jump="postings">
           <div class="dash-label">공고</div>
           <div class="dash-num">${s.postings}</div>
+          <div class="dash-sub muted">누적</div>
         </button>
-        <div class="dash-card static">
-          <div class="dash-label">이력서 PDF</div>
-          <div class="dash-num">${s.documents}</div>
-        </div>
       </div>
-      <div class="dash-charts">
-        <div class="panel chart-panel">
-          <h3>일별 지원 추이 <span class="muted chart-sub">최근 14일</span></h3>
-          <div class="chart-wrap"><canvas id="chart-apps-daily"></canvas></div>
-        </div>
-        <div class="panel chart-panel">
-          <h3>일별 인재검색 수집 <span class="muted chart-sub">최근 14일</span></h3>
-          <div class="chart-wrap"><canvas id="chart-talents-daily"></canvas></div>
-        </div>
-        <div class="panel chart-panel">
-          <h3>지원 단계</h3>
-          <div class="chart-wrap chart-wrap-sm"><canvas id="chart-stages"></canvas></div>
-        </div>
-        <div class="panel chart-panel">
-          <h3>플랫폼별 지원</h3>
-          <div class="chart-wrap chart-wrap-sm"><canvas id="chart-platforms"></canvas></div>
+      <div class="dash-charts dash-charts-single">
+        <div class="panel chart-panel chart-panel-wide">
+          <div class="chart-head">
+            <h3>${trendTitle} <span class="muted chart-sub">최근 14일</span></h3>
+            <div class="chart-filters" role="group" aria-label="추이 필터">
+              <button type="button" class="chip-filter ${dashTrendMode === "apps" ? "active" : ""}" data-trend="apps">지원자</button>
+              <button type="button" class="chip-filter ${dashTrendMode === "talents" ? "active" : ""}" data-trend="talents">인재검색</button>
+            </div>
+          </div>
+          <div class="chart-wrap chart-wrap-lg"><canvas id="chart-trend-daily"></canvas></div>
         </div>
       </div>
       <div class="panel dash-recent">
@@ -601,137 +605,82 @@ function mountDashboardCharts() {
   if (!ChartCtor || !dashboardStats) return;
 
   const s = dashboardStats;
-  const brand = "#2563eb";
-  const brandSoft = "rgba(37, 99, 235, 0.15)";
-  const teal = "#0d9488";
-  const tealSoft = "rgba(13, 148, 136, 0.15)";
-  const palette = ["#2563eb", "#0d9488", "#d97706", "#dc2626", "#7c3aed", "#64748b", "#0891b2"];
+  const isTalent = dashTrendMode === "talents";
+  const series = isTalent ? s.talentsDaily : s.appsDaily;
+  const color = isTalent ? "#0d9488" : "#2563eb";
+  const soft = isTalent ? "rgba(13, 148, 136, 0.15)" : "rgba(37, 99, 235, 0.15)";
 
   const commonScale = {
     grid: { color: "rgba(15, 23, 42, 0.06)" },
     ticks: { color: "#64748b", font: { size: 11 } },
   };
 
-  const appsCanvas = document.getElementById("chart-apps-daily");
-  if (appsCanvas) {
-    dashCharts.push(
-      new ChartCtor(appsCanvas, {
-        type: "line",
-        data: {
-          labels: s.appsDaily?.labels || [],
-          datasets: [
-            {
-              label: "지원",
-              data: s.appsDaily?.values || [],
-              borderColor: brand,
-              backgroundColor: brandSoft,
-              fill: true,
-              tension: 0.35,
-              pointRadius: 3,
-              pointHoverRadius: 5,
-            },
-          ],
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
-          scales: { x: commonScale, y: { ...commonScale, beginAtZero: true, ticks: { ...commonScale.ticks, precision: 0 } } },
-        },
-      }),
-    );
-  }
+  const canvas = document.getElementById("chart-trend-daily");
+  if (!canvas) return;
 
-  const talentCanvas = document.getElementById("chart-talents-daily");
-  if (talentCanvas) {
-    dashCharts.push(
-      new ChartCtor(talentCanvas, {
-        type: "line",
-        data: {
-          labels: s.talentsDaily?.labels || [],
-          datasets: [
-            {
-              label: "인재",
-              data: s.talentsDaily?.values || [],
-              borderColor: teal,
-              backgroundColor: tealSoft,
-              fill: true,
-              tension: 0.35,
-              pointRadius: 3,
-              pointHoverRadius: 5,
-            },
-          ],
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
-          scales: { x: commonScale, y: { ...commonScale, beginAtZero: true, ticks: { ...commonScale.ticks, precision: 0 } } },
-        },
-      }),
-    );
-  }
-
-  const stageEntries = Object.entries(s.byStage || {}).sort((a, b) => b[1] - a[1]);
-  const stageCanvas = document.getElementById("chart-stages");
-  if (stageCanvas) {
-    dashCharts.push(
-      new ChartCtor(stageCanvas, {
-        type: "bar",
-        data: {
-          labels: stageEntries.map(([k]) => stageLabel(k)),
-          datasets: [
-            {
-              label: "인원",
-              data: stageEntries.map(([, v]) => v),
-              backgroundColor: stageEntries.map((_, i) => palette[i % palette.length]),
-              borderRadius: 6,
-            },
-          ],
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
-          scales: {
-            x: { ...commonScale, grid: { display: false } },
-            y: { ...commonScale, beginAtZero: true, ticks: { ...commonScale.ticks, precision: 0 } },
+  dashCharts.push(
+    new ChartCtor(canvas, {
+      type: "line",
+      data: {
+        labels: series?.labels || [],
+        datasets: [
+          {
+            label: isTalent ? "인재" : "지원",
+            data: series?.values || [],
+            borderColor: color,
+            backgroundColor: soft,
+            fill: true,
+            tension: 0.35,
+            pointRadius: 3,
+            pointHoverRadius: 5,
           },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: commonScale,
+          y: { ...commonScale, beginAtZero: true, ticks: { ...commonScale.ticks, precision: 0 } },
         },
-      }),
-    );
-  }
+      },
+    }),
+  );
 
-  const platEntries = Object.entries(s.byPlatform || {}).sort((a, b) => b[1] - a[1]);
-  const platCanvas = document.getElementById("chart-platforms");
-  if (platCanvas) {
-    const labels = platEntries.length ? platEntries.map(([k]) => platformLabel(k)) : ["데이터 없음"];
-    const data = platEntries.length ? platEntries.map(([, v]) => v) : [1];
-    const colors = platEntries.length
-      ? platEntries.map((_, i) => palette[i % palette.length])
-      : ["#e2e8f0"];
-    dashCharts.push(
-      new ChartCtor(platCanvas, {
-        type: "doughnut",
-        data: {
-          labels,
-          datasets: [{ data, backgroundColor: colors, borderWidth: 0 }],
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: {
-              display: platEntries.length > 0,
-              position: "bottom",
-              labels: { boxWidth: 12, color: "#64748b" },
-            },
-            tooltip: { enabled: platEntries.length > 0 },
-          },
-        },
-      }),
-    );
-  }
+  document.querySelectorAll("[data-trend]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const mode = btn.getAttribute("data-trend");
+      if (!mode || mode === dashTrendMode) return;
+      dashTrendMode = mode;
+      const listPane = document.getElementById("list-pane");
+      if (!listPane) return;
+      listPane.innerHTML = renderDashboard();
+      document.getElementById("btn-refresh")?.addEventListener("click", () => refresh(false));
+      document.querySelectorAll("[data-jump]").forEach((b) => {
+        b.addEventListener("click", async () => {
+          tab = b.getAttribute("data-jump");
+          selected = null;
+          await refresh();
+        });
+      });
+      document.querySelectorAll("[data-goto-app]").forEach((b) => {
+        b.addEventListener("click", async () => {
+          tab = "applicants";
+          filterQ = "";
+          await refresh(true);
+          selected = rows.find((r) => r.id === b.getAttribute("data-goto-app")) || null;
+          if (selected) {
+            document
+              .querySelector(`.candidate-card[data-id="${selected.id}"]`)
+              ?.classList.add("selected");
+            await renderDetail();
+          }
+        });
+      });
+      mountDashboardCharts();
+    });
+  });
 }
 
 function renderPostingCards() {

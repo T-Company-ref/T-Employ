@@ -133,22 +133,49 @@ function buildDailySeries(rows, dateField, days = 14) {
   return { labels, values };
 }
 
+function kstDateKey(isoOrDate) {
+  const d = isoOrDate instanceof Date ? isoOrDate : new Date(isoOrDate);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+}
+
+function addDaysToKey(dateKey, delta) {
+  const [y, m, day] = dateKey.split("-").map(Number);
+  const utc = new Date(Date.UTC(y, m - 1, day));
+  utc.setUTCDate(utc.getUTCDate() + delta);
+  return utc.toISOString().slice(0, 10);
+}
+
+/** 해당 KST 날짜의 월요일(주차 시작) */
+function weekStartKey(dateKey) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Seoul",
+    weekday: "short",
+  }).format(new Date(`${dateKey}T12:00:00+09:00`));
+  const map = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  const weekday = map[parts] ?? 1;
+  const back = weekday === 0 ? 6 : weekday - 1;
+  return addDaysToKey(dateKey, -back);
+}
+
+function countByDateKeys(rows, field, predicate) {
+  let n = 0;
+  for (const row of rows) {
+    const key = kstDateKey(row[field]);
+    if (key && predicate(key)) n += 1;
+  }
+  return n;
+}
+
 export async function getDashboardStats(sb) {
   const since = new Date();
   since.setDate(since.getDate() - 30);
   const sinceIso = since.toISOString();
+  const todayKey = kstDateKey(new Date());
+  const yesterdayKey = addDaysToKey(todayKey, -1);
+  const weekFrom = weekStartKey(todayKey);
 
-  const [
-    apps,
-    talents,
-    postings,
-    docs,
-    recentApps,
-    stageRows,
-    appDates,
-    talentDates,
-    platformRows,
-  ] = await Promise.all([
+  const [apps, talents, postings, docs, recentApps, appDates, talentDates] = await Promise.all([
     sb.from("applications").select("id", { count: "exact", head: true }),
     sb.from("talent_pool_candidates").select("id", { count: "exact", head: true }),
     sb.from("job_postings").select("id", { count: "exact", head: true }),
@@ -162,7 +189,6 @@ export async function getDashboardStats(sb) {
       )
       .order("applied_at", { ascending: false })
       .limit(10),
-    sb.from("applications").select("current_stage"),
     sb
       .from("applications")
       .select("applied_at")
@@ -175,44 +201,31 @@ export async function getDashboardStats(sb) {
       .gte("created_at", sinceIso)
       .order("created_at", { ascending: true })
       .limit(2000),
-    sb.from("applications").select("platform"),
   ]);
 
-  for (const r of [
-    apps,
-    talents,
-    postings,
-    docs,
-    recentApps,
-    stageRows,
-    appDates,
-    talentDates,
-    platformRows,
-  ]) {
+  for (const r of [apps, talents, postings, docs, recentApps, appDates, talentDates]) {
     if (r.error) throw r.error;
   }
 
-  const byStage = {};
-  for (const row of stageRows.data ?? []) {
-    const k = row.current_stage || "unknown";
-    byStage[k] = (byStage[k] || 0) + 1;
-  }
-
-  const byPlatform = {};
-  for (const row of platformRows.data ?? []) {
-    const k = row.platform || "unknown";
-    byPlatform[k] = (byPlatform[k] || 0) + 1;
-  }
+  const appRows = appDates.data ?? [];
+  const applicantsYesterday = countByDateKeys(appRows, "applied_at", (k) => k === yesterdayKey);
+  const applicantsThisWeek = countByDateKeys(
+    appRows,
+    "applied_at",
+    (k) => k >= weekFrom && k <= todayKey,
+  );
 
   return {
     applicants: apps.count ?? 0,
     talents: talents.count ?? 0,
     postings: postings.count ?? 0,
     documents: docs.count ?? 0,
-    byStage,
-    byPlatform,
+    applicantsYesterday,
+    applicantsThisWeek,
+    yesterdayLabel: yesterdayKey.slice(5).replace("-", "."),
+    weekLabel: `${weekFrom.slice(5).replace("-", ".")}–${todayKey.slice(5).replace("-", ".")}`,
     recentApps: recentApps.data ?? [],
-    appsDaily: buildDailySeries(appDates.data ?? [], "applied_at", 14),
+    appsDaily: buildDailySeries(appRows, "applied_at", 14),
     talentsDaily: buildDailySeries(talentDates.data ?? [], "created_at", 14),
   };
 }

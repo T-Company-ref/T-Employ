@@ -654,17 +654,47 @@ a.pdf-open-btn:active {
 .dash-card:hover:not(.static) { border-color: #bfdbfe; }
 .dash-label { color: var(--muted); font-size: 0.85rem; margin-bottom: 6px; }
 .dash-num { font-size: 1.8rem; font-weight: 700; letter-spacing: -0.02em; }
+.dash-sub { font-size: 0.78rem; margin-top: 4px; }
 .dash-charts {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
   margin-bottom: 14px;
 }
+.dash-charts-single {
+  grid-template-columns: 1fr;
+}
 @media (max-width: 900px) {
   .dash-charts { grid-template-columns: 1fr; }
 }
 .chart-panel {
   margin-bottom: 0;
+}
+.chart-panel-wide { min-height: 320px; }
+.chart-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.chart-head h3 { margin: 0; }
+.chart-filters { display: flex; gap: 6px; }
+.chip-filter {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.chip-filter.active {
+  border-color: #93c5fd;
+  background: var(--brand-soft);
+  color: var(--brand);
 }
 .chart-panel h3 {
   display: flex;

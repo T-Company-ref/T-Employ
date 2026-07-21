@@ -26,7 +26,7 @@ async function countTalentPdfStatus(): Promise<{ total: number; ok: number; brok
 }
 
 function parseLimit(): number {
-  const maxItems = Number(process.env.CRAWL_MAX_ITEMS || process.env.PDF_MAX_ITEMS || '5');
+  const maxItems = Number(process.env.PDF_MAX_ITEMS || process.env.PDF_BATCH_SIZE || '5');
   return !Number.isNaN(maxItems) && maxItems > 0 ? maxItems : 5;
 }
 

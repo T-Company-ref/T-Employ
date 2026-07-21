@@ -12,9 +12,9 @@ on:
         required: false
         default: "jobkorea"
       limit:
-        description: "Max items"
+        description: "Max talents (site cap, default 5)"
         required: false
-        default: "20"
+        default: "5"
 
 concurrency:
   group: t-employ-db-write
@@ -35,7 +35,8 @@ jobs:
       JOBKOREA_PASSWORD: ${{ secrets.JOBKOREA_PASSWORD }}
       HEADLESS: "true"
       AUTO_CRAWL_ENABLED: "true"
-      CRAWL_MAX_ITEMS: ${{ github.event.inputs.limit || '20' }}
+      CRAWL_MAX_ITEMS: ${{ github.event.inputs.limit || '5' }}
+      TALENT_CRAWL_MAX_ITEMS: ${{ github.event.inputs.limit || '5' }}
       CRAWL_FETCH_RESUMES: "false"
       GMAIL_USER: ${{ secrets.GMAIL_USER }}
       GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}

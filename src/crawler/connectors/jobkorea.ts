@@ -78,7 +78,7 @@ export class JobkoreaConnector extends BaseConnector {
     await this.assertAuthenticated(ctx);
     await ctx.log('info', '인재검색 목록 진입 완료', undefined, 'goto_list');
 
-    const limit = env.crawlMaxItems();
+    const limit = env.talentCrawlMaxItems();
     const results = await collectPaginated(
       () => extractTalentPage(ctx.page, ctx.routeMap, limit),
       () => clickNextTalentPage(ctx.page, ctx.routeMap),

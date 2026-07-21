@@ -186,8 +186,6 @@ export function buildMorningDigestHtml(params: {
   workday: ApplicantAlertRow[];
 }): string {
   const { slices, evening, talents, workday } = params;
-  const totalApps = evening.length + workday.length;
-  const review = evening.length + talents.length + workday.length;
   const reportDay = fmtReportDay(slices.reportDate);
 
   return `<!DOCTYPE html><html lang="ko"><body style="margin:0;padding:0;background:#e8eef6;font-family:'Segoe UI',Apple SD Gothic Neo,Malgun Gothic,Arial,sans-serif;color:#0f172a;line-height:1.5">
@@ -208,9 +206,9 @@ export function buildMorningDigestHtml(params: {
     <div style="background:#f8fafc;border-left:1px solid #dbe3ef;border-right:1px solid #dbe3ef;padding:18px 16px 10px">
       <div style="font-size:13px;font-weight:800;color:#0f172a;margin:0 0 10px 6px">전일 채용 요약</div>
       <table width="100%" cellpadding="0" cellspacing="0"><tr>
-        ${kpi('신규 지원자', `${totalApps}명`, `근무 ${workday.length} · 저녁 ${evening.length}`, '#2563eb', '#dbeafe')}
-        ${kpi('추천 인재', `${talents.length}명`, '인재풀 신규 검색', '#059669', '#d1fae5')}
-        ${kpi('검토 항목', `${review}건`, '오늘 확인 권장', '#7c3aed', '#ede9fe')}
+        ${kpi('저녁 지원', `${evening.length}명`, slices.evening.rangeLabel, '#2563eb', '#dbeafe')}
+        ${kpi('근무 지원', `${workday.length}명`, slices.workday.rangeLabel, '#059669', '#d1fae5')}
+        ${kpi('추천 인재', `${talents.length}명`, '인재풀 신규', '#7c3aed', '#ede9fe')}
       </tr></table>
     </div>
 
@@ -226,24 +224,24 @@ export function buildMorningDigestHtml(params: {
         tbody: applicantRows(evening, true),
       })}
       ${sectionCard({
-        accent: '#7c3aed',
-        soft: '#f5f3ff',
-        step: '2',
-        title: '어제 신규 추천 인재 (인재풀)',
-        rangeLabel: '신규 검색',
-        count: talents.length,
-        thead: TALENT_HEAD,
-        tbody: talentRows(talents),
-      })}
-      ${sectionCard({
         accent: '#059669',
         soft: '#ecfdf5',
-        step: '3',
+        step: '2',
         title: slices.workday.title,
         rangeLabel: slices.workday.rangeLabel,
         count: workday.length,
         thead: APP_HEAD,
         tbody: applicantRows(workday, false),
+      })}
+      ${sectionCard({
+        accent: '#7c3aed',
+        soft: '#f5f3ff',
+        step: '3',
+        title: '어제 신규 추천 인재 (인재풀)',
+        rangeLabel: '신규 검색',
+        count: talents.length,
+        thead: TALENT_HEAD,
+        tbody: talentRows(talents),
       })}
 
       <div style="margin-top:6px;padding:14px 16px;border-radius:12px;background:#ffffff;border:1px solid #bfdbfe">
@@ -265,6 +263,5 @@ export function morningDigestSubject(
   talentCount: number,
   workdayCount: number,
 ): string {
-  const totalApps = eveningCount + workdayCount;
-  return `[TBELL] 채용 모닝 다이제스트 · ${fmtHeaderDate(slices.sendDate)} · 지원 ${totalApps} · 인재 ${talentCount}`;
+  return `[TBELL] 채용 모닝 다이제스트 · ${fmtHeaderDate(slices.sendDate)} · 저녁 ${eveningCount} · 근무 ${workdayCount} · 인재 ${talentCount}`;
 }

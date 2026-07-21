@@ -68,8 +68,10 @@ export const env = {
   dataDir: () => optional('PGLITE_DIR', 'data/pgdata'),
   headless: () => bool('HEADLESS', true),
   captureScreenshots: () => bool('CAPTURE_SCREENSHOTS', true),
-  /** Phase 1 수집 상한 (플랫폼당) */
-  crawlMaxItems: () => Math.max(1, Number(optional('CRAWL_MAX_ITEMS', '20')) || 20),
+  /** Phase 1 수집 상한 (지원자 폴링/크롤 플랫폼당) */
+  crawlMaxItems: () => Math.max(1, Number(optional('CRAWL_MAX_ITEMS', '50')) || 50),
+  /** 인재검색 일일 수집 상한 (사이트당, 기본 5 — 지원자 CRAWL_MAX_ITEMS 와 분리) */
+  talentCrawlMaxItems: () => Math.max(1, Number(optional('TALENT_CRAWL_MAX_ITEMS', '5')) || 5),
   /** 크롤 시 상세 진입 후 이력서 PDF 수집 */
   crawlFetchResumes: () => bool('CRAWL_FETCH_RESUMES', true),
   supabaseUrl: () => optional('SUPABASE_URL'),
