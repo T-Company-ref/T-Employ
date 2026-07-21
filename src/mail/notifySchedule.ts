@@ -184,13 +184,13 @@ export function getDigestReportSlices(now: Date = new Date()): DigestReportSlice
     evening: {
       start: eveningStart,
       end: eveningEnd,
-      title: win.kind === 'weekend' ? '주말·야간 신규 지원자' : '어제 저녁 신규 지원자',
+      title: win.kind === 'weekend' ? '주말·야간' : '어제 저녁',
       rangeLabel: win.kind === 'weekend' ? '금 18:00 ~ 월 07:30' : '18:00 ~ 24:00',
     },
     workday: {
       start: workdayStart,
       end: workdayEnd,
-      title: win.kind === 'weekend' ? '금요일 근무시간 지원자' : '어제 근무시간 신규 지원자',
+      title: win.kind === 'weekend' ? '금요일 근무중' : '어제 근무중',
       rangeLabel: '09:00 ~ 18:00',
     },
     talent: { start: win.start, end: win.end },

@@ -206,9 +206,9 @@ export function buildMorningDigestHtml(params: {
     <div style="background:#f8fafc;border-left:1px solid #dbe3ef;border-right:1px solid #dbe3ef;padding:18px 16px 10px">
       <div style="font-size:13px;font-weight:800;color:#0f172a;margin:0 0 10px 6px">전일 채용 요약</div>
       <table width="100%" cellpadding="0" cellspacing="0"><tr>
-        ${kpi('저녁 지원', `${evening.length}명`, slices.evening.rangeLabel, '#2563eb', '#dbeafe')}
-        ${kpi('근무 지원', `${workday.length}명`, slices.workday.rangeLabel, '#059669', '#d1fae5')}
-        ${kpi('추천 인재', `${talents.length}명`, '인재풀 신규', '#7c3aed', '#ede9fe')}
+        ${kpi('어제 저녁', `${evening.length}명`, slices.evening.rangeLabel, '#2563eb', '#dbeafe')}
+        ${kpi('어제 근무중', `${workday.length}명`, slices.workday.rangeLabel, '#059669', '#d1fae5')}
+        ${kpi('추천 인재 풀', `${talents.length}명`, '인재풀 신규', '#7c3aed', '#ede9fe')}
       </tr></table>
     </div>
 
@@ -237,7 +237,7 @@ export function buildMorningDigestHtml(params: {
         accent: '#7c3aed',
         soft: '#f5f3ff',
         step: '3',
-        title: '어제 신규 추천 인재 (인재풀)',
+        title: '추천 인재 풀',
         rangeLabel: '신규 검색',
         count: talents.length,
         thead: TALENT_HEAD,
