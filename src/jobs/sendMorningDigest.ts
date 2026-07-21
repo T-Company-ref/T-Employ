@@ -90,6 +90,10 @@ async function pickVerifiedTalents(
 async function main(): Promise<void> {
   const force = process.argv.includes('--force') || process.argv.includes('--force-weekend');
   const talentsOnly = process.argv.includes('--talents-only');
+  const toIdx = process.argv.indexOf('--to');
+  if (toIdx >= 0 && process.argv[toIdx + 1]) {
+    process.env.DIGEST_FORCE_TO = process.argv[toIdx + 1];
+  }
   const skipBrowser =
     process.argv.includes('--no-browser') ||
     process.env.DIGEST_SKIP_BROWSER === 'true' ||

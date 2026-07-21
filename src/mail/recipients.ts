@@ -43,6 +43,10 @@ async function staffEmailsFor(channel: 'realtime' | 'digest'): Promise<string[]>
  * - digest: 아침 다이제스트
  */
 export async function resolveMailRecipients(channel: NotifyChannel): Promise<string[]> {
+  const forceTo = (process.env.DIGEST_FORCE_TO || '').trim();
+  if (forceTo && channel === 'digest') {
+    return normalizeEmails(forceTo.split(/[,;\s]+/));
+  }
   const ops = env.actionNotifyEmails();
   if (channel === 'ops') return normalizeEmails(ops);
 

@@ -1,11 +1,10 @@
 /**
- * 채용 모닝 다이제스트 HTML (참고 시안 기반)
+ * 채용 모닝 다이제스트 HTML
  */
 import type { ApplicantAlertRow } from '../db/repositories/applicantAlerts.js';
 import type { TalentAlertRow } from '../db/repositories/talentAlerts.js';
 import type { DigestReportSlices, KstParts } from './notifySchedule.js';
 import { toKstParts } from './notifySchedule.js';
-import { env } from '../config/env.js';
 
 const TWEMOJI = 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg';
 const WEEKDAY_KO = ['일', '월', '화', '수', '목', '금', '토'];
@@ -52,52 +51,57 @@ function clean(raw: string | null | undefined): string {
     .trim();
 }
 
-function pdfCell(pdfUrl: string | null | undefined): string {
-  if (!pdfUrl) return `<span style="color:#9ca3af;font-size:12px">없음</span>`;
-  return `<a href="${esc(pdfUrl)}" style="display:inline-block;padding:5px 9px;border-radius:7px;background:#dbeafe;border:1px solid #93c5fd;color:#1d4ed8;font-size:12px;font-weight:700;text-decoration:none">PDF 열기</a>`;
+function linkBtn(href: string | null | undefined, label: string, variant: 'primary' | 'pdf' | 'ghost' = 'primary'): string {
+  if (!href) {
+    return `<span style="display:inline-block;padding:6px 10px;border-radius:8px;background:#f3f4f6;color:#9ca3af;font-size:12px;font-weight:600">${esc(label === 'PDF 열기' ? 'PDF 없음' : '—')}</span>`;
+  }
+  const styles =
+    variant === 'pdf'
+      ? 'background:#eff6ff;border:1px solid #93c5fd;color:#1d4ed8'
+      : variant === 'ghost'
+        ? 'background:#ffffff;border:1px solid #cbd5e1;color:#334155'
+        : 'background:#1e3a8a;border:1px solid #1e3a8a;color:#ffffff';
+  return `<a href="${esc(href)}" style="display:inline-block;padding:6px 11px;border-radius:8px;${styles};font-size:12px;font-weight:700;text-decoration:none;line-height:1.2">${esc(label)}</a>`;
 }
 
-function detailBtn(href: string | null | undefined, label = '자세히 보기'): string {
-  if (!href) return `<span style="color:#9ca3af;font-size:12px">—</span>`;
-  return `<a href="${esc(href)}" style="display:inline-block;padding:5px 10px;border-radius:7px;background:#1e3a8a;color:#ffffff;font-size:12px;font-weight:700;text-decoration:none">${esc(label)}</a>`;
-}
-
-function appHref(item: ApplicantAlertRow): string | null {
-  return item.detailUrl || `${env.webAppUrl()}?tab=applicants&q=${encodeURIComponent(item.name || '')}`;
-}
-
-function talentHref(item: TalentAlertRow): string | null {
-  return item.profileUrl || `${env.webAppUrl()}?tab=talent&q=${encodeURIComponent(item.name || '')}`;
+/** 지원자: 공고 지원자 목록으로 이동 (ResumeDB 직접 링크는 세션/경로 오류) */
+function appListHref(item: ApplicantAlertRow): string | null {
+  return item.applicantListUrl || null;
 }
 
 function skillPills(skills: string[] | undefined): string {
-  if (!skills?.length) return '<span style="color:#9ca3af">—</span>';
+  if (!skills?.length) return '<span style="color:#94a3b8;font-size:12px">—</span>';
   return skills
     .slice(0, 5)
     .map(
       (s) =>
-        `<span style="display:inline-block;background:#f3e8ff;color:#6b21a8;border-radius:6px;padding:2px 7px;font-size:11px;font-weight:600;margin:1px 3px 1px 0">${esc(s)}</span>`,
+        `<span style="display:inline-block;background:#f5f3ff;color:#6d28d9;border-radius:999px;padding:3px 8px;font-size:11px;font-weight:600;margin:2px 3px 2px 0">${esc(s)}</span>`,
     )
     .join('');
 }
 
+function th(label: string, align: 'left' | 'center' = 'left'): string {
+  return `<th style="padding:10px 12px;font-size:11px;font-weight:700;letter-spacing:0.02em;color:#64748b;text-align:${align};border-bottom:1px solid #e2e8f0">${esc(label)}</th>`;
+}
+
 function applicantRows(items: ApplicantAlertRow[], showNew = false): string {
   if (!items.length) {
-    return `<tr><td colspan="6" style="padding:16px 12px;color:#6b7280;text-align:center">해당 지원자 없음</td></tr>`;
+    return `<tr><td colspan="6" style="padding:22px 12px;color:#94a3b8;text-align:center;font-size:13px">해당 지원자 없음</td></tr>`;
   }
   return items
     .slice(0, 50)
-    .map((item) => {
+    .map((item, idx) => {
+      const bg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
       const badge = showNew
-        ? `<span style="display:inline-block;margin-left:6px;padding:1px 6px;border-radius:4px;background:#dbeafe;color:#1d4ed8;font-size:10px;font-weight:800">NEW</span>`
+        ? `<span style="display:inline-block;margin-left:6px;padding:2px 6px;border-radius:4px;background:#dbeafe;color:#1d4ed8;font-size:10px;font-weight:800;vertical-align:middle">NEW</span>`
         : '';
-      return `<tr>
-        <td style="padding:11px 10px;border-bottom:1px solid #eef2f7;font-size:13px">${esc(item.postingTitle || item.position || '공고 미연결')}</td>
-        <td style="padding:11px 10px;border-bottom:1px solid #eef2f7;font-size:13px;font-weight:700;white-space:nowrap">${esc(item.name || '(이름 없음)')}${badge}</td>
-        <td style="padding:11px 10px;border-bottom:1px solid #eef2f7;font-size:13px;white-space:nowrap">${fmtTime(item.appliedAt)}</td>
-        <td style="padding:11px 10px;border-bottom:1px solid #eef2f7;font-size:12px;color:#475569">${esc(item.careerTotal || '—')}</td>
-        <td style="padding:11px 10px;border-bottom:1px solid #eef2f7;text-align:center">${pdfCell(item.pdfUrl)}</td>
-        <td style="padding:11px 10px;border-bottom:1px solid #eef2f7;text-align:center">${detailBtn(appHref(item))}</td>
+      return `<tr style="background:${bg}">
+        <td style="padding:12px;font-size:13px;color:#0f172a;border-bottom:1px solid #eef2f7">${esc(item.postingTitle || item.position || '공고 미연결')}</td>
+        <td style="padding:12px;font-size:13px;font-weight:700;color:#0f172a;white-space:nowrap;border-bottom:1px solid #eef2f7">${esc(item.name || '(이름 없음)')}${badge}</td>
+        <td style="padding:12px;font-size:13px;color:#475569;white-space:nowrap;border-bottom:1px solid #eef2f7">${fmtTime(item.appliedAt)}</td>
+        <td style="padding:12px;font-size:12px;color:#64748b;border-bottom:1px solid #eef2f7">${esc(item.careerTotal || '—')}</td>
+        <td style="padding:12px;text-align:center;border-bottom:1px solid #eef2f7">${linkBtn(item.pdfUrl, 'PDF 열기', 'pdf')}</td>
+        <td style="padding:12px;text-align:center;border-bottom:1px solid #eef2f7">${linkBtn(appListHref(item), '지원자 목록', 'primary')}</td>
       </tr>`;
     })
     .join('');
@@ -105,20 +109,23 @@ function applicantRows(items: ApplicantAlertRow[], showNew = false): string {
 
 function talentRows(items: TalentAlertRow[]): string {
   if (!items.length) {
-    return `<tr><td colspan="7" style="padding:16px 12px;color:#6b7280;text-align:center">해당 인재 없음</td></tr>`;
+    return `<tr><td colspan="5" style="padding:22px 12px;color:#94a3b8;text-align:center;font-size:13px">해당 인재 없음</td></tr>`;
   }
   return items
-    .map((item) => {
+    .map((item, idx) => {
+      const bg = idx % 2 === 0 ? '#ffffff' : '#faf5ff';
       const role = clean((item.roles || [])[0] || item.headline || '—').slice(0, 40);
       const skills = (item.skills || []).map(clean).filter(Boolean);
-      return `<tr>
-        <td style="padding:11px 10px;border-bottom:1px solid #eef2f7;font-size:13px;font-weight:700;white-space:nowrap">${esc(clean(item.name) || '(이름 없음)')}</td>
-        <td style="padding:11px 10px;border-bottom:1px solid #eef2f7;font-size:12px">${esc(role)}</td>
-        <td style="padding:11px 10px;border-bottom:1px solid #eef2f7;font-size:12px;white-space:nowrap">${esc(clean(item.careerText) || '—')}</td>
-        <td style="padding:11px 10px;border-bottom:1px solid #eef2f7">${skillPills(skills)}</td>
-        <td style="padding:11px 10px;border-bottom:1px solid #eef2f7;text-align:center">${detailBtn(item.profileUrl, '바로가기')}</td>
-        <td style="padding:11px 10px;border-bottom:1px solid #eef2f7;text-align:center">${pdfCell(item.pdfUrl)}</td>
-        <td style="padding:11px 10px;border-bottom:1px solid #eef2f7;text-align:center">${detailBtn(talentHref(item))}</td>
+      return `<tr style="background:${bg}">
+        <td style="padding:12px;font-size:13px;font-weight:700;color:#0f172a;white-space:nowrap;border-bottom:1px solid #eef2f7">${esc(clean(item.name) || '(이름 없음)')}</td>
+        <td style="padding:12px;font-size:12px;color:#334155;border-bottom:1px solid #eef2f7">${esc(role)}</td>
+        <td style="padding:12px;font-size:12px;color:#64748b;white-space:nowrap;border-bottom:1px solid #eef2f7">${esc(clean(item.careerText) || '—')}</td>
+        <td style="padding:12px;border-bottom:1px solid #eef2f7">${skillPills(skills)}</td>
+        <td style="padding:12px;text-align:center;border-bottom:1px solid #eef2f7;white-space:nowrap">
+          ${linkBtn(item.profileUrl, '프로필', 'ghost')}
+          <span style="display:inline-block;width:6px"></span>
+          ${linkBtn(item.pdfUrl, 'PDF 열기', 'pdf')}
+        </td>
       </tr>`;
     })
     .join('');
@@ -126,61 +133,51 @@ function talentRows(items: TalentAlertRow[]): string {
 
 function sectionCard(params: {
   accent: string;
-  iconBg: string;
+  soft: string;
+  step: string;
   title: string;
   rangeLabel: string;
   count: number;
   thead: string;
   tbody: string;
 }): string {
-  return `<div style="margin:0 0 18px;background:#ffffff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden">
-    <div style="padding:14px 16px;border-bottom:1px solid #eef2f7">
+  return `<div style="margin:0 0 16px;background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(15,23,42,0.04)">
+    <div style="padding:14px 16px;background:linear-gradient(90deg, ${params.soft} 0%, #ffffff 70%);border-bottom:1px solid #eef2f7">
       <table width="100%" cellpadding="0" cellspacing="0"><tr>
-        <td>
+        <td style="vertical-align:middle">
           <table cellpadding="0" cellspacing="0"><tr>
-            <td style="width:10px;background:${params.accent};border-radius:4px">&nbsp;</td>
+            <td style="width:28px;height:28px;border-radius:8px;background:${params.accent};color:#fff;font-size:12px;font-weight:800;text-align:center;line-height:28px">${esc(params.step)}</td>
             <td style="padding-left:10px">
               <div style="font-size:15px;font-weight:800;color:#0f172a">${esc(params.title)}</div>
-              <div style="font-size:12px;color:#64748b;margin-top:2px">[${esc(params.rangeLabel)}]</div>
+              <div style="font-size:12px;color:#64748b;margin-top:2px">${esc(params.rangeLabel)}</div>
             </td>
           </tr></table>
         </td>
-        <td align="right"><span style="display:inline-block;padding:5px 10px;border-radius:999px;background:${params.iconBg};color:${params.accent};font-size:12px;font-weight:800">총 ${params.count}명</span></td>
+        <td align="right" style="vertical-align:middle">
+          <span style="display:inline-block;padding:6px 11px;border-radius:999px;background:#ffffff;border:1px solid ${params.accent}33;color:${params.accent};font-size:12px;font-weight:800">총 ${params.count}명</span>
+        </td>
       </tr></table>
     </div>
     <table cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;width:100%">
-      <thead><tr style="background:#f8fafc;color:#64748b;font-size:11px;text-align:left">${params.thead}</tr></thead>
+      <thead><tr style="background:#f8fafc">${params.thead}</tr></thead>
       <tbody>${params.tbody}</tbody>
     </table>
   </div>`;
 }
 
-function kpi(label: string, value: string, sub: string, color: string): string {
-  return `<td style="width:33.33%;padding:4px">
-    <div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;padding:14px 12px;text-align:center">
+function kpi(label: string, value: string, sub: string, color: string, soft: string): string {
+  return `<td style="width:33.33%;padding:5px">
+    <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:14px;padding:16px 12px;text-align:center">
+      <div style="width:36px;height:36px;border-radius:10px;background:${soft};margin:0 auto 8px;line-height:36px;font-size:14px;font-weight:800;color:${color}">●</div>
       <div style="font-size:12px;color:#64748b;font-weight:600">${esc(label)}</div>
-      <div style="margin-top:6px;font-size:26px;font-weight:800;color:${color}">${esc(value)}</div>
+      <div style="margin-top:6px;font-size:28px;font-weight:800;color:${color};letter-spacing:-0.03em">${esc(value)}</div>
       <div style="margin-top:6px;font-size:11px;color:#94a3b8">${esc(sub)}</div>
     </div>
   </td>`;
 }
 
-const APP_HEAD = `
-  <th style="padding:9px 10px;font-weight:700">채용공고</th>
-  <th style="padding:9px 10px;font-weight:700">이름</th>
-  <th style="padding:9px 10px;font-weight:700">지원시각</th>
-  <th style="padding:9px 10px;font-weight:700">경력</th>
-  <th style="padding:9px 10px;font-weight:700;text-align:center">이력서</th>
-  <th style="padding:9px 10px;font-weight:700;text-align:center">이동</th>`;
-
-const TALENT_HEAD = `
-  <th style="padding:9px 10px;font-weight:700">이름</th>
-  <th style="padding:9px 10px;font-weight:700">직무</th>
-  <th style="padding:9px 10px;font-weight:700">경력</th>
-  <th style="padding:9px 10px;font-weight:700">핵심 역량</th>
-  <th style="padding:9px 10px;font-weight:700;text-align:center">프로필</th>
-  <th style="padding:9px 10px;font-weight:700;text-align:center">이력서</th>
-  <th style="padding:9px 10px;font-weight:700;text-align:center">이동</th>`;
+const APP_HEAD = `${th('채용공고')}${th('이름')}${th('지원시각')}${th('경력')}${th('이력서', 'center')}${th('이동', 'center')}`;
+const TALENT_HEAD = `${th('이름')}${th('직무')}${th('경력')}${th('핵심 역량')}${th('프로필 · PDF', 'center')}`;
 
 export function buildMorningDigestHtml(params: {
   slices: DigestReportSlices;
@@ -193,32 +190,36 @@ export function buildMorningDigestHtml(params: {
   const review = evening.length + talents.length + workday.length;
   const reportDay = fmtReportDay(slices.reportDate);
 
-  return `<!DOCTYPE html><html lang="ko"><body style="margin:0;padding:0;background:#eef2f7;font-family:Segoe UI,Apple SD Gothic Neo,Malgun Gothic,Arial,sans-serif;color:#1f2937;line-height:1.5">
-  <div style="max-width:860px;margin:0 auto;padding:20px 12px 28px">
-    <div style="background:#0f2747;border-radius:16px 16px 0 0;padding:22px;color:#fff">
+  return `<!DOCTYPE html><html lang="ko"><body style="margin:0;padding:0;background:#e8eef6;font-family:'Segoe UI',Apple SD Gothic Neo,Malgun Gothic,Arial,sans-serif;color:#0f172a;line-height:1.5">
+  <div style="max-width:880px;margin:0 auto;padding:24px 14px 32px">
+    <div style="background:linear-gradient(135deg,#0b1f3a 0%,#1e3a8a 55%,#2563eb 100%);border-radius:18px 18px 0 0;padding:26px 24px 22px;color:#fff">
       <table width="100%" cellpadding="0" cellspacing="0"><tr>
         <td>
-          <div style="font-size:20px;font-weight:800">${tw('1f4e8', '', 22)} 채용 모닝 다이제스트</div>
-          <div style="margin-top:8px;font-size:13px;opacity:0.9">전일(${esc(reportDay)}) 채용 현황 요약</div>
+          <div style="font-size:12px;opacity:0.75;font-weight:600;letter-spacing:0.04em">TBELL EMPLOY</div>
+          <div style="margin-top:8px;font-size:22px;font-weight:800;letter-spacing:-0.02em">${tw('1f4e8', '', 22)} 채용 모닝 다이제스트</div>
+          <div style="margin-top:8px;font-size:13px;opacity:0.88">전일(${esc(reportDay)}) 채용 현황 요약 · 실시간 미구독자도 이 메일로 전일을 확인할 수 있습니다</div>
         </td>
-        <td align="right" style="font-size:13px;font-weight:600;white-space:nowrap">${esc(fmtHeaderDate(slices.sendDate))}</td>
+        <td align="right" style="vertical-align:top">
+          <div style="display:inline-block;padding:8px 12px;border-radius:10px;background:rgba(255,255,255,0.12);font-size:13px;font-weight:700;white-space:nowrap">${esc(fmtHeaderDate(slices.sendDate))}</div>
+        </td>
       </tr></table>
     </div>
 
-    <div style="background:#f8fafc;border:1px solid #e5e7eb;border-top:0;padding:16px 14px 8px">
-      <div style="font-size:13px;font-weight:800;color:#0f172a;margin:0 0 10px 4px">전일 채용 요약</div>
+    <div style="background:#f8fafc;border-left:1px solid #dbe3ef;border-right:1px solid #dbe3ef;padding:18px 16px 10px">
+      <div style="font-size:13px;font-weight:800;color:#0f172a;margin:0 0 10px 6px">전일 채용 요약</div>
       <table width="100%" cellpadding="0" cellspacing="0"><tr>
-        ${kpi('신규 지원자', `${totalApps}명`, `근무 ${workday.length} · 저녁 ${evening.length}`, '#2563eb')}
-        ${kpi('추천 인재', `${talents.length}명`, '인재풀 신규 검색', '#059669')}
-        ${kpi('검토 항목', `${review}건`, '오늘 확인 권장', '#7c3aed')}
+        ${kpi('신규 지원자', `${totalApps}명`, `근무 ${workday.length} · 저녁 ${evening.length}`, '#2563eb', '#dbeafe')}
+        ${kpi('추천 인재', `${talents.length}명`, '인재풀 신규 검색', '#059669', '#d1fae5')}
+        ${kpi('검토 항목', `${review}건`, '오늘 확인 권장', '#7c3aed', '#ede9fe')}
       </tr></table>
     </div>
 
-    <div style="background:#f1f5f9;border:1px solid #e5e7eb;border-top:0;border-radius:0 0 16px 16px;padding:16px 14px 18px">
+    <div style="background:#eef3f9;border:1px solid #dbe3ef;border-top:0;border-radius:0 0 18px 18px;padding:16px 14px 20px">
       ${sectionCard({
         accent: '#2563eb',
-        iconBg: '#dbeafe',
-        title: `1. ${slices.evening.title}`,
+        soft: '#eff6ff',
+        step: '1',
+        title: slices.evening.title,
         rangeLabel: slices.evening.rangeLabel,
         count: evening.length,
         thead: APP_HEAD,
@@ -226,8 +227,9 @@ export function buildMorningDigestHtml(params: {
       })}
       ${sectionCard({
         accent: '#7c3aed',
-        iconBg: '#ede9fe',
-        title: '2. 어제 신규 추천 인재 (인재풀)',
+        soft: '#f5f3ff',
+        step: '2',
+        title: '어제 신규 추천 인재 (인재풀)',
         rangeLabel: '신규 검색',
         count: talents.length,
         thead: TALENT_HEAD,
@@ -235,17 +237,23 @@ export function buildMorningDigestHtml(params: {
       })}
       ${sectionCard({
         accent: '#059669',
-        iconBg: '#d1fae5',
-        title: `3. ${slices.workday.title}`,
+        soft: '#ecfdf5',
+        step: '3',
+        title: slices.workday.title,
         rangeLabel: slices.workday.rangeLabel,
         count: workday.length,
         thead: APP_HEAD,
         tbody: applicantRows(workday, false),
       })}
-      <div style="margin-top:4px;padding:12px 14px;border-radius:10px;background:#eff6ff;border:1px solid #bfdbfe;font-size:12px;color:#1e40af;line-height:1.55">
-        <b>TIP</b> · 실시간 알림을 받지 않아도 이 메일만으로 전일 지원·인재 현황을 확인할 수 있습니다. <b>자세히 보기</b>/<b>PDF 열기</b>로 바로 이동하세요.
+
+      <div style="margin-top:6px;padding:14px 16px;border-radius:12px;background:#ffffff;border:1px solid #bfdbfe">
+        <div style="font-size:12px;font-weight:800;color:#1d4ed8;margin-bottom:4px">TIP</div>
+        <div style="font-size:12px;color:#334155;line-height:1.6">
+          지원자 <b>지원자 목록</b>은 잡코리아 해당 공고의 지원자 리스트로 이동합니다.
+          인재는 <b>프로필</b>에서 원문을, <b>PDF 열기</b>로 저장된 이력서를 확인하세요.
+        </div>
       </div>
-      <p style="margin:14px 0 0;font-size:11px;color:#94a3b8;text-align:center">TBELL Employ 자동 발송 · 알림 설정은 웹 프로필에서 변경할 수 있습니다.</p>
+      <p style="margin:16px 0 0;font-size:11px;color:#94a3b8;text-align:center">TBELL Employ 자동 발송 · 알림 설정은 웹 프로필에서 변경할 수 있습니다.</p>
     </div>
   </div>
   </body></html>`;

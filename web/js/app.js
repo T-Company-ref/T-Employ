@@ -84,11 +84,11 @@ function renderDocuments(docs) {
   return `<p class="doc-meta muted">${esc(date)} 수집</p>`;
 }
 
-function renderProfileLinkRow(profileUrl, docs) {
+function renderProfileLinkRow(profileUrl, docs, { label = "잡코리아 프로필", listMode = false } = {}) {
   const pdf = docs?.find((d) => d.file_url && !d.file_url.startsWith("file://"));
   const profileLink = profileUrl
-    ? `<a class="profile-origin-link" href="${esc(profileUrl)}" target="_blank" rel="noopener">잡코리아 프로필 ${Icon.external({ size: 14, className: "inline-icon" })}</a>`
-    : `<span class="muted">프로필 링크 없음</span>`;
+    ? `<a class="profile-origin-link" href="${esc(profileUrl)}" target="_blank" rel="noopener">${esc(label)} ${Icon.external({ size: 14, className: "inline-icon" })}</a>`
+    : `<span class="muted">${listMode ? "공고 지원자 목록 링크 없음" : "프로필 링크 없음"}</span>`;
   const pdfBtn = pdf
     ? `<a class="pdf-open-btn" href="${esc(pdf.file_url)}" target="_blank" rel="noopener" title="이력서 PDF 열기">
         ${Icon.file({ size: 18, className: "pdf-open-icon" })}
@@ -100,6 +100,14 @@ function renderProfileLinkRow(profileUrl, docs) {
         <span class="pdf-open-label">PDF 없음</span>
       </span>`;
   return `<div class="profile-link-row">${profileLink}${pdfBtn}</div>`;
+}
+
+function applicantListUrl(r) {
+  const gi = r?.posting?.external_posting_id;
+  if (r?.platform === "jobkorea" && gi) {
+    return `https://www.jobkorea.co.kr/Corp/Applicant/list?GI_No=${encodeURIComponent(gi)}&PageCode=YA`;
+  }
+  return r?.posting?.meta?.applicantListUrl || null;
 }
 
 function renderConfigMissing() {
@@ -962,7 +970,7 @@ async function renderApplicantDetail(pane) {
     ),
     detailSection(
       "프로필",
-      `${renderProfileLinkRow(meta.detailUrl, docs)}${renderDocuments(docs)}`,
+      `${renderProfileLinkRow(applicantListUrl(r), docs, { label: "잡코리아 지원자 목록", listMode: true })}${renderDocuments(docs)}`,
       { icon: Icon.link({ size: 16 }) },
     ),
     detailSection(

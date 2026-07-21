@@ -13,8 +13,19 @@ export type ApplicantAlertRow = NewApplicantBrief & {
   careerHistory?: string[];
   pdfUrl?: string | null;
   detailUrl?: string | null;
+  /** 잡코리아 공고 지원자 목록 (자세히 보기용) */
+  applicantListUrl?: string | null;
+  giNo?: string | null;
   platformLabel?: string;
 };
+
+function applicantListUrlFor(platform: string, giNo: string | null | undefined): string | null {
+  if (!giNo) return null;
+  if (platform === 'jobkorea') {
+    return `https://www.jobkorea.co.kr/Corp/Applicant/list?GI_No=${encodeURIComponent(giNo)}&PageCode=YA`;
+  }
+  return null;
+}
 
 function mapRows(
   rows: Array<{
@@ -26,6 +37,7 @@ function mapRows(
     external_ref: string;
     profile_meta: ApplicantProfileMeta | null;
     pdf_url: string | null;
+    external_posting_id?: string | null;
   }>,
 ): ApplicantAlertRow[] {
   return rows.map((r) => {
@@ -33,6 +45,7 @@ function mapRows(
     const education = [meta.educationLevel, meta.educationSchool, meta.educationMajor]
       .filter(Boolean)
       .join(' · ');
+    const giNo = r.external_posting_id || null;
     return {
       applicationId: r.id,
       name: r.name,
@@ -49,6 +62,8 @@ function mapRows(
       careerHistory: meta.careerHistory ?? [],
       pdfUrl: r.pdf_url && String(r.pdf_url).startsWith('http') ? r.pdf_url : null,
       detailUrl: meta.detailUrl ?? null,
+      giNo,
+      applicantListUrl: applicantListUrlFor(r.platform, giNo),
       platformLabel: r.platform === 'jobkorea' ? '잡코리아' : r.platform === 'saramin' ? '사람인' : r.platform,
     };
   });
@@ -81,6 +96,7 @@ export async function loadApplicantAlertDetails(
     external_ref: string;
     profile_meta: ApplicantProfileMeta | null;
     pdf_url: string | null;
+    external_posting_id: string | null;
   }>(
     `SELECT a.id,
             c.name,
@@ -89,6 +105,7 @@ export async function loadApplicantAlertDetails(
             a.applied_at,
             a.external_ref,
             a.profile_meta,
+            p.external_posting_id,
             (
               SELECT d.file_url
               FROM candidate_documents d
@@ -128,6 +145,7 @@ export async function listApplicantsInDigestWindow(params: {
     external_ref: string;
     profile_meta: ApplicantProfileMeta | null;
     pdf_url: string | null;
+    external_posting_id: string | null;
   }>(
     `SELECT a.id,
             c.name,
@@ -136,6 +154,7 @@ export async function listApplicantsInDigestWindow(params: {
             a.applied_at,
             a.external_ref,
             a.profile_meta,
+            p.external_posting_id,
             (
               SELECT d.file_url
               FROM candidate_documents d
@@ -186,6 +205,7 @@ export async function listApplicantsByAppliedRange(params: {
     external_ref: string;
     profile_meta: ApplicantProfileMeta | null;
     pdf_url: string | null;
+    external_posting_id: string | null;
   }>(
     `SELECT a.id,
             c.name,
@@ -194,6 +214,7 @@ export async function listApplicantsByAppliedRange(params: {
             a.applied_at,
             a.external_ref,
             a.profile_meta,
+            p.external_posting_id,
             (
               SELECT d.file_url
               FROM candidate_documents d
