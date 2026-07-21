@@ -198,69 +198,59 @@ function cleanTalentText(raw: string | null | undefined): string | undefined {
 export async function extractTalentPage(
   page: Page,
   routeMap: RouteMap,
+  maxRows = 50,
 ): Promise<NormalizedTalent[]> {
   const rowSel = resolveSelector(routeMap, 'talent_row');
   const rows = page.locator(rowSel);
-  const count = await rows.count();
+  const count = Math.min(await rows.count(), Math.max(1, maxRows));
   const sourcedAt = new Date().toISOString();
 
   const results: NormalizedTalent[] = [];
+  const rowMs = 5_000;
   for (let i = 0; i < count; i++) {
     const row = rows.nth(i);
-    const profileRef = await row.getAttribute('data-rno');
+    const profileRef = await row.getAttribute('data-rno', { timeout: rowMs }).catch(() => null);
     if (!profileRef) continue;
 
+    const textOf = async (selector: string) =>
+      row.locator(selector).first().textContent({ timeout: rowMs }).catch(() => null);
+    const textsOf = async (selector: string) =>
+      row.locator(selector).allTextContents({ timeout: rowMs }).catch(() => [] as string[]);
+
     // strong 만 쓰면 화살표 span 이 섞이지 않음. 없으면 title 텍스트에서 노이즈 제거
-    const headlineStrong = (
-      await row.locator('.tdSummary .title strong').first().textContent().catch(() => null)
-    )?.trim();
-    const headlineRaw = headlineStrong
-      || (await row.locator('.tdSummary .title').first().textContent().catch(() => null))?.trim();
+    const headlineStrong = (await textOf('.tdSummary .title strong'))?.trim();
+    const headlineRaw = headlineStrong || (await textOf('.tdSummary .title'))?.trim();
     const headline = cleanTalentText(headlineRaw);
 
-    const name = cleanTalentText(
-      await row.locator('.nameAge dt, .devName').first().textContent().catch(() => null),
-    );
-    const genderAge = cleanTalentText(
-      await row.locator('.nameAge dd, .devAge').first().textContent().catch(() => null),
-    );
-    const careerText = cleanTalentText(
-      await row.locator('.careerLayer dd, .devCareerYear').first().textContent().catch(() => null),
-    );
-    const companyRaw = (
-      await row.locator('.careerLayer dt, .companyName, .devCareerCo').first().textContent().catch(() => null)
-    )?.trim();
+    const name = cleanTalentText(await textOf('.nameAge dt, .devName'));
+    const genderAge = cleanTalentText(await textOf('.nameAge dd, .devAge'));
+    const careerText = cleanTalentText(await textOf('.careerLayer dd, .devCareerYear'));
+    const companyRaw = (await textOf('.careerLayer dt, .companyName, .devCareerCo'))?.trim();
     const company = cleanTalentText(companyRaw);
 
-    const roles = (
-      await row.locator('.careerLayer .item, .devCareerItem, .jobList li, .devPart').allTextContents()
-    )
+    const roles = (await textsOf('.careerLayer .item, .devCareerItem, .jobList li, .devPart'))
       .map((t) => cleanTalentText(t))
       .filter((t): t is string => Boolean(t));
 
-    const skills = (
-      await row.locator('.keywordBox button, .keywordBox a, .devKeyword').allTextContents()
-    )
+    const skills = (await textsOf('.keywordBox button, .keywordBox a, .devKeyword'))
       .map((t) => cleanTalentText(t))
       .filter((t): t is string => Boolean(t));
 
-    const badges = (
-      await row.locator('.hashTagArea a, .hashTagArea span, .devHashTag, .badgeList span').allTextContents()
-    )
+    const badges = (await textsOf('.hashTagArea a, .hashTagArea span, .devHashTag, .badgeList span'))
       .map((t) => cleanTalentText(t))
       .filter((t): t is string => Boolean(t));
 
     const jobStatus = cleanTalentText(
-      await row
-        .locator(
-          '.hopeTxt, .jobState, .devJobState, .wishType, .tplStat, .stat, dd:has-text("구직"), dd:has-text("재직"), dd:has-text("취업")',
-        )
-        .first()
-        .textContent()
-        .catch(() => null),
+      await textOf(
+        '.hopeTxt, .jobState, .devJobState, .wishType, .tplStat, .stat, dd:has-text("구직"), dd:has-text("재직"), dd:has-text("취업")',
+      ),
     );
 
-    const href = await row.locator('a.dvResumeLink, a[href*="Resume"]').first().getAttribute('href');
+    const href = await row
+      .locator('a.dvResumeLink, a[href*="Resume"]')
+      .first()
+      .getAttribute('href', { timeout: rowMs })
+      .catch(() => null);
 
     const profileMeta: TalentProfileMeta = {
       genderAge: genderAge || undefined,

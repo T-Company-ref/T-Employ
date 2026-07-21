@@ -80,7 +80,7 @@ export class JobkoreaConnector extends BaseConnector {
 
     const limit = env.crawlMaxItems();
     const results = await collectPaginated(
-      () => extractTalentPage(ctx.page, ctx.routeMap),
+      () => extractTalentPage(ctx.page, ctx.routeMap, limit),
       () => clickNextTalentPage(ctx.page, ctx.routeMap),
       (r) => r.profileRef,
       limit,

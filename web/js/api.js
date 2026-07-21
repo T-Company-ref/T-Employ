@@ -63,7 +63,7 @@ export async function updateMyStaffProfile(sb, staffId, { nickname, displayName,
   return data;
 }
 
-export async function listPostings(sb, { q = "", platform = "", limit = 100 } = {}) {
+export async function listPostings(sb, { q = "", platform = "", limit = 500 } = {}) {
   let query = sb
     .from("job_postings")
     .select("id, platform, title, external_posting_id, source_url, meta, opened_at, closed_at, created_at, updated_at")
@@ -217,7 +217,7 @@ export async function getDashboardStats(sb) {
   };
 }
 
-export async function listApplications(sb, { q = "", platform = "", limit = 100 } = {}) {
+export async function listApplications(sb, { q = "", platform = "", limit = 500 } = {}) {
   let query = sb
     .from("applications")
     .select(

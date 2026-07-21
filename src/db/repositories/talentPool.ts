@@ -67,6 +67,7 @@ export async function upsertTalents(records: NormalizedTalent[]): Promise<Talent
            headline = EXCLUDED.headline,
            summary_text = EXCLUDED.summary_text,
            search_condition = EXCLUDED.search_condition,
+           sourced_at = EXCLUDED.sourced_at,
            candidate_id = COALESCE(EXCLUDED.candidate_id, talent_pool_candidates.candidate_id),
            profile_meta = EXCLUDED.profile_meta
          RETURNING id, (xmax = 0) AS is_new`,
