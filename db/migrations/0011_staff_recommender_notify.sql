@@ -30,6 +30,15 @@ SET display_name = '주호정',
     notify_pref = COALESCE(NULLIF(notify_pref, 'none'), 'digest')
 WHERE lower(email) = 'hj.joo@tbell.co.kr';
 
+INSERT INTO staff_profiles (nickname, display_name, email, role, notify_pref, is_active)
+VALUES ('yh.park', 'yh.park', 'yh.park@tbell.co.kr', 'recommender', 'digest', true)
+ON CONFLICT (nickname) DO UPDATE SET
+  email = EXCLUDED.email,
+  display_name = EXCLUDED.display_name,
+  role = EXCLUDED.role,
+  notify_pref = EXCLUDED.notify_pref,
+  is_active = true;
+
 -- 기존 operator 는 실시간 알림 기본
 UPDATE staff_profiles
 SET notify_pref = 'realtime'

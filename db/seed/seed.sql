@@ -32,7 +32,7 @@ ON CONFLICT (nickname) DO NOTHING;
 
 -- 웹 로그인용 운영자 (Supabase Auth 이메일과 매칭 → auth_user_id 트리거로 연결)
 INSERT INTO staff_profiles (nickname, display_name, email, role)
-VALUES ('yj.kim', '김영진', 'yj.kim@tbell.co.kr', 'operator')
+VALUES ('yj.kim', '김연서', 'yj.kim@tbell.co.kr', 'operator')
 ON CONFLICT (nickname) DO UPDATE SET
   email = EXCLUDED.email,
   display_name = EXCLUDED.display_name,
@@ -42,8 +42,10 @@ ON CONFLICT (nickname) DO UPDATE SET
 INSERT INTO staff_profiles (nickname, display_name, email, role, notify_pref)
 VALUES
   ('jonghyuk.kim', '김종혁', 'jonghyuk.kim@tbell.co.kr', 'recommender', 'digest'),
-  ('hj.joo', '주호정', 'hj.joo@tbell.co.kr', 'recommender', 'digest')
+  ('hj.joo', '주호정', 'hj.joo@tbell.co.kr', 'recommender', 'digest'),
+  ('yh.park', 'yh.park', 'yh.park@tbell.co.kr', 'recommender', 'digest')
 ON CONFLICT (nickname) DO UPDATE SET
   email = EXCLUDED.email,
   display_name = EXCLUDED.display_name,
-  role = EXCLUDED.role;
+  role = EXCLUDED.role,
+  notify_pref = EXCLUDED.notify_pref;

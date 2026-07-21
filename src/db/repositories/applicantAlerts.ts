@@ -167,3 +167,50 @@ export async function listApplicantsInDigestWindow(params: {
   );
   return mapRows(res.rows);
 }
+
+/**
+ * 지원 시각(applied_at) 기준 구간 조회.
+ * includeAlerted=true 이면 이미 알림 보낸 지원자도 포함 (오전 메일 근무시간 전체 목록용).
+ */
+export async function listApplicantsByAppliedRange(params: {
+  start: Date;
+  end: Date;
+  includeAlerted?: boolean;
+}): Promise<ApplicantAlertRow[]> {
+  const res = await query<{
+    id: string;
+    name: string | null;
+    posting_title: string | null;
+    platform: string;
+    applied_at: string | null;
+    external_ref: string;
+    profile_meta: ApplicantProfileMeta | null;
+    pdf_url: string | null;
+  }>(
+    `SELECT a.id,
+            c.name,
+            p.title AS posting_title,
+            a.platform,
+            a.applied_at,
+            a.external_ref,
+            a.profile_meta,
+            (
+              SELECT d.file_url
+              FROM candidate_documents d
+              WHERE d.application_id = a.id
+                AND d.doc_type = 'resume'
+              ORDER BY d.collected_at DESC NULLS LAST
+              LIMIT 1
+            ) AS pdf_url
+     FROM applications a
+     LEFT JOIN candidates c ON c.id = a.candidate_id
+     LEFT JOIN job_postings p ON p.id = a.posting_id
+     WHERE a.applied_at IS NOT NULL
+       AND a.applied_at >= $1
+       AND a.applied_at < $2
+       AND ($3::boolean OR a.alerted_at IS NULL)
+     ORDER BY a.applied_at DESC NULLS LAST, a.created_at DESC`,
+    [params.start.toISOString(), params.end.toISOString(), params.includeAlerted === true],
+  );
+  return mapRows(res.rows);
+}

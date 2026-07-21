@@ -75,6 +75,8 @@ export const env = {
   supabaseUrl: () => optional('SUPABASE_URL'),
   supabaseServiceRoleKey: () => optional('SUPABASE_SERVICE_ROLE_KEY'),
   resumeStorageBucket: () => optional('RESUME_STORAGE_BUCKET', 'resumes'),
+  /** 웹 UI 베이스 URL (메일 '자세히 보기' 링크) */
+  webAppUrl: () => optional('WEB_APP_URL', 'https://t-company-ref.github.io/T-Employ/').replace(/\/?$/, '/'),
   /** Phase 2: cron 자동 실행 제어 (로컬 기본 false) */
   autoCrawlEnabled: () => bool('AUTO_CRAWL_ENABLED', false),
   platformCreds: (platform: string) => ({

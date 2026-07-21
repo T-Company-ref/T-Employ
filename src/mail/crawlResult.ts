@@ -17,7 +17,9 @@ import {
   isWeekendKst,
   getDigestWindow,
   type DigestKind,
+  type DigestReportSlices,
 } from './notifySchedule.js';
+import { buildMorningDigestHtml, morningDigestSubject } from './morningDigestHtml.js';
 
 /** Twemoji SVG (jsDelivr) — 메일 클라이언트용 <img> */
 const TWEMOJI = 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg';
@@ -292,84 +294,43 @@ export async function sendApplicantCrawlResultMail(results: RunResult[]): Promis
   }
 }
 
-/** 07:30 다이제스트 — 지원자 + 인재 한 통 */
+/** 07:30 다이제스트 — 저녁 지원 → 인재 → 근무시간 지원(전체) */
 export async function sendCombinedDigestMail(
-  applicants: ApplicantAlertRow[],
+  eveningApplicants: ApplicantAlertRow[],
   talents: TalentAlertRow[],
-  options: {
-    kind: DigestKind;
-    label: string;
-    start: Date;
-    end: Date;
-  },
+  workdayApplicants: ApplicantAlertRow[],
+  slices: DigestReportSlices,
 ): Promise<void> {
-  if (applicants.length === 0 && talents.length === 0) {
-    console.log(`[mail/crawl] ${options.label} — 발송할 지원자·인재 없음`);
+  if (eveningApplicants.length === 0 && talents.length === 0 && workdayApplicants.length === 0) {
+    console.log(`[mail/crawl] ${slices.label} — 발송할 지원자·인재 없음`);
     return;
   }
 
-  const a = toKstParts(options.start);
-  const b = toKstParts(options.end);
-  const range = `${a.month}/${a.day} ${pad(a.hour)}:${pad(a.minute)}–${b.month}/${b.day} ${pad(b.hour)}:${pad(b.minute)}`;
-  const tag = options.kind === 'weekend' ? '주말' : '모닝';
-  const subject = `[TBELL] ${tag} 지원 ${applicants.length}명 · 인재 ${talents.length}명 · ${range}`;
-
-  const title =
-    options.kind === 'weekend'
-      ? `${tw(EMOJI.bell, '', 20)} 주말 다이제스트`
-      : `${tw(EMOJI.bell, '', 20)} 모닝 다이제스트`;
-
-  const intro = `<p style="margin:0 0 18px;font-size:14px;color:#374151;line-height:1.6">
-    ${tw(EMOJI.calendar, '기간', 18)}
-    <b>${esc(fmtKstDateTime(options.start))}</b> ~
-    <b>${esc(fmtKstDateTime(options.end))}</b>
-    사이 지원자 ${applicants.length}명 · 추천 인재 ${talents.length}명
-  </p>`;
+  const subject = morningDigestSubject(
+    slices,
+    eveningApplicants.length,
+    talents.length,
+    workdayApplicants.length,
+  );
 
   const to = await resolveMailRecipients('digest');
   if (to.length === 0) {
     console.log('[mail/crawl] 다이제스트 수신자 없음 — 발송 생략');
     return;
   }
-  const enrichedApplicants = await resolveMailItems(applicants);
 
-  const html = `<!DOCTYPE html><html lang="ko"><body style="margin:0;padding:16px;background:#f8fafc;font-family:Segoe UI,Apple SD Gothic Neo,Malgun Gothic,Arial,sans-serif;color:#1f2937;line-height:1.5">
-  <div style="max-width:720px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;padding:20px 18px">
-    <h2 style="margin:0 0 12px;font-size:18px;color:#0f172a">${title}</h2>
-    ${intro}
-
-    <h3 style="margin:24px 0 10px;font-size:15px;color:#0f172a">${tw(EMOJI.people, '', 18)} 지원자 ${applicants.length}명</h3>
-    <table cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%">
-      <thead><tr style="text-align:left;color:#64748b;font-size:12px;background:#f1f5f9">
-        <th style="padding:8px 12px;border-bottom:1px solid #e2e8f0">${tw(EMOJI.people, '', 14)} 지원자 · 공고</th>
-        <th style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:right">${tw(EMOJI.calendar, '', 14)} 지원일 · PDF</th>
-      </tr></thead>
-      <tbody>${applicantCards(enrichedApplicants)}</tbody>
-    </table>
-
-    <h3 style="margin:28px 0 10px;font-size:15px;color:#0f172a">${tw(EMOJI.people, '', 18)} 추천 인재 ${talents.length}명</h3>
-    <p style="margin:0 0 10px;font-size:12px;color:#6b7280">구직·이직 가능 확인 · 최대 5명</p>
-    <table cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%">
-      <thead><tr style="text-align:left;color:#64748b;font-size:12px;background:#f1f5f9">
-        <th style="padding:8px 12px;border-bottom:1px solid #e2e8f0">${tw(EMOJI.people, '', 14)} 후보</th>
-        <th style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:right">${tw(EMOJI.calendar, '', 14)} 수집일 · PDF</th>
-      </tr></thead>
-      <tbody>${talentCards(talents)}</tbody>
-    </table>
-
-    <p style="margin:16px 0 0;font-size:11px;color:#94a3b8">TBELL Employ</p>
-  </div>
-  </body></html>`;
+  const evening = await resolveMailItems(eveningApplicants);
+  const workday = await resolveMailItems(workdayApplicants);
+  const html = buildMorningDigestHtml({ slices, evening, talents, workday });
 
   await sendHtmlMail({ to, subject, html, allowDryRun: true });
-  if (applicants.length > 0) {
-    await markApplicationsAlerted(applicants.map((i) => i.applicationId));
-  }
-  if (talents.length > 0) {
-    await markTalentsAlerted(talents.map((i) => i.talentId));
-  }
+
+  const markAppIds = [...evening, ...workday].map((i) => i.applicationId);
+  if (markAppIds.length > 0) await markApplicationsAlerted(markAppIds);
+  if (talents.length > 0) await markTalentsAlerted(talents.map((i) => i.talentId));
+
   console.log(
-    `[mail/crawl] ${subject} → ${to.join(', ')} (지원 ${enrichedApplicants.length} · 인재 ${talents.length})`,
+    `[mail/crawl] ${subject} → ${to.join(', ')} (저녁 ${evening.length} · 인재 ${talents.length} · 근무 ${workday.length})`,
   );
 }
 
