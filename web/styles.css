@@ -709,6 +709,7 @@ a.pdf-open-btn:active {
   height: 220px;
 }
 .chart-wrap-sm { height: 200px; }
+.chart-wrap-lg { height: 300px; }
 .dash-recent { margin-bottom: 24px; }
 .table-scroll { overflow-x: auto; }
 .dash-table {
