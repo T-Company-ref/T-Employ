@@ -50,7 +50,7 @@ sudo bash /opt/t-employ/deploy/oracle/smoke-check.sh
 
 | Timer | When | Job |
 |-------|------|-----|
-| `t-employ-session.timer` | 매일 06:30 | `session:refresh` |
+| `t-employ-session.timer` | 평일 07:17 · 13:17 | `session:refresh` |
 | `t-employ-talent.timer` | 매일 07:00 | `crawl:talent` |
 | `t-employ-pdf.timer` | 매일 07:20 | `pdf:applicants` |
 | `t-employ-digest.timer` | 월~금 07:30 | `mail:morning-digest` |

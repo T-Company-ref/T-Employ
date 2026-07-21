@@ -1,10 +1,13 @@
 name: session-refresh
 
-# Session refresh ? monthly (KST day 01 06:30) + manual. Playwright required.
+# JobKorea session refresh twice daily (session TTL ~5?6h) + manual.
+# KST 07:17 / 13:17 weekdays ? covers poll window 08:17?19:17.
 on:
   schedule:
-    # Daily 21:30 UTC (= 06:30 KST); gate job runs only on KST day 01
-    - cron: "30 21 * * *"
+    # 07:17 KST Mon-Fri = 22:17 UTC Sun-Thu
+    - cron: "17 22 * * 0-4"
+    # 13:17 KST Mon-Fri = 04:17 UTC Mon-Fri
+    - cron: "17 4 * * 1-5"
   workflow_dispatch:
     inputs:
       platform:
@@ -24,30 +27,7 @@ permissions:
   contents: write
 
 jobs:
-  gate:
-    runs-on: ubuntu-latest
-    timeout-minutes: 2
-    outputs:
-      should_run: ${{ steps.check.outputs.should_run }}
-    steps:
-      - id: check
-        run: |
-          if [[ "${{ github.event_name }}" != "schedule" ]]; then
-            echo "should_run=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          day=$(TZ=Asia/Seoul date +%d)
-          echo "KST day=$day"
-          if [[ "$day" == "01" ]]; then
-            echo "should_run=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "should_run=false" >> "$GITHUB_OUTPUT"
-            echo "Not the 1st KST ? skip monthly session refresh"
-          fi
-
   refresh:
-    needs: gate
-    if: needs.gate.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:

@@ -351,16 +351,17 @@ a:hover { text-decoration: underline; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 1rem;
   line-height: 1;
   cursor: default;
+  color: var(--brand);
 }
+.platform-icon .ui-icon { display: block; }
 .platform-icon-lg {
-  font-size: 1.35rem;
-  padding: 4px 6px;
+  padding: 6px 8px;
   border-radius: 8px;
   background: var(--surface-2);
   border: 1px solid var(--line);
+  color: var(--brand);
 }
 .meta-pill.platform {
   padding: 2px 8px;
@@ -403,8 +404,20 @@ a:hover { text-decoration: underline; }
   color: var(--text);
 }
 .section-icon {
-  font-size: 1rem;
+  display: inline-flex;
+  align-items: center;
+  color: var(--brand);
   line-height: 1;
+}
+.ui-icon {
+  display: inline-block;
+  vertical-align: -0.15em;
+  flex-shrink: 0;
+}
+.inline-icon {
+  margin-left: 2px;
+  vertical-align: -0.2em;
+  opacity: 0.75;
 }
 .detail-facts {
   display: grid;
@@ -477,6 +490,20 @@ a:hover { text-decoration: underline; }
 }
 .tag-type { font-weight: 700; font-size: 0.82rem; }
 .tag-comment { font-size: 0.8rem; color: var(--muted); }
+.tag-chip button,
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+}
+.tag-chip button:hover,
+.icon-btn:hover { color: var(--text); background: var(--surface-2); }
 .tag-author {
   font-size: 0.72rem;
   color: var(--muted);
@@ -498,7 +525,7 @@ a:hover { text-decoration: underline; }
   border: 1px dashed var(--line);
   border-radius: 10px;
 }
-.doc-empty-icon { font-size: 1.8rem; display: block; margin-bottom: 8px; }
+.doc-empty-icon { display: block; margin: 0 auto 8px; color: var(--muted); }
 .doc-empty p { margin: 0 0 4px; font-weight: 600; }
 .doc-item-main {
   display: flex;
@@ -506,7 +533,7 @@ a:hover { text-decoration: underline; }
   gap: 10px;
   min-width: 0;
 }
-.doc-item-icon { font-size: 1.4rem; flex-shrink: 0; }
+.doc-item-icon { flex-shrink: 0; color: var(--brand); }
 .doc-item-title { font-weight: 600; font-size: 0.88rem; }
 .doc-item-date { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
 .profile-link-row {
@@ -520,6 +547,9 @@ a:hover { text-decoration: underline; }
   border-radius: 10px;
 }
 .profile-origin-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-weight: 600;
   font-size: 0.9rem;
   text-decoration: none;
@@ -527,30 +557,54 @@ a:hover { text-decoration: underline; }
   word-break: break-all;
 }
 .profile-origin-link:hover { text-decoration: underline; }
-.pdf-icon-btn {
+.pdf-open-btn {
   flex-shrink: 0;
-  font-size: 1.35rem;
-  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid #93c5fd;
+  background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
+  color: #1d4ed8;
+  font-size: 0.82rem;
+  font-weight: 700;
   text-decoration: none;
-  padding: 4px 6px;
-  border-radius: 8px;
-  border: 1px solid transparent;
-  transition: background 0.12s, border-color 0.12s;
+  line-height: 1;
+  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.12);
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.12s;
 }
-a.pdf-icon-btn:hover {
-  background: var(--brand-soft);
-  border-color: #bfdbfe;
+a.pdf-open-btn:hover {
+  background: linear-gradient(180deg, #dbeafe 0%, #bfdbfe 100%);
+  border-color: #3b82f6;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.22);
+  transform: translateY(-1px);
 }
-.pdf-icon-btn.is-disabled {
-  opacity: 0.35;
+a.pdf-open-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.15);
+}
+.pdf-open-icon { color: #dc2626; }
+.pdf-open-ext { opacity: 0.7; }
+.pdf-open-label { letter-spacing: -0.01em; white-space: nowrap; }
+.pdf-open-btn.is-disabled {
+  opacity: 0.45;
   cursor: default;
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--muted);
+  box-shadow: none;
 }
+.pdf-open-btn.is-disabled .pdf-open-icon { color: var(--muted); }
 .doc-meta {
   margin: 8px 2px 0;
   font-size: 0.78rem;
 }
 .detail-close {
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 36px;
   height: 36px;
   border-radius: 10px;

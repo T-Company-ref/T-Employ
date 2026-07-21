@@ -9,7 +9,7 @@
 
 | Job | Workflow / npm | 기술 | 주기 (KST) |
 |-----|----------------|------|------------|
-| 세션 갱신 | `session-refresh` / `session:refresh` | Playwright | **매월 1일 06:30** + 수동 |
+| 세션 갱신 | `session-refresh` / `session:refresh` | Playwright | 평일 **07:17 · 13:17** + 수동 |
 | 인재 수집 | `crawl-talent` / `crawl:talent` | Playwright | 평일 **07:07** |
 | 지원자 PDF | `pdf-applicants` / `pdf:applicants` | Playwright 인쇄 | 평일 **07:27** + 수동 (누락분만) |
 | 아침 다이제스트 | `mail-morning-digest` / `mail:morning-digest` | DB + SMTP (브라우저 없음) | 평일 **07:37** |
@@ -18,7 +18,7 @@
 | 인재 PDF | `pdf:talents` | Playwright | 필요 시 |
 
 - `crawl:applicants` = 구형 Playwright 풀 크롤 (비상용). 일상은 `poll:applicants`.
-- 세션 만료 시 **자동 refresh 없음** → 관리자 메일 1회 → `session-refresh` 수동.
+- 세션 만료(~5–6h) 대비 **평일 2회** 자동 refresh. 실패 시 관리자 메일 → 수동 `session-refresh`.
 
 ## 환경
 

@@ -1,5 +1,6 @@
 import { configReady, createClient } from "./client.js";
 import * as api from "./api.js";
+import { Icon } from "./icons.js";
 import {
   stageLabel,
   proposalLabel,
@@ -86,11 +87,18 @@ function renderDocuments(docs) {
 function renderProfileLinkRow(profileUrl, docs) {
   const pdf = docs?.find((d) => d.file_url && !d.file_url.startsWith("file://"));
   const profileLink = profileUrl
-    ? `<a class="profile-origin-link" href="${esc(profileUrl)}" target="_blank" rel="noopener">잡코리아 프로필 ↗</a>`
+    ? `<a class="profile-origin-link" href="${esc(profileUrl)}" target="_blank" rel="noopener">잡코리아 프로필 ${Icon.external({ size: 14, className: "inline-icon" })}</a>`
     : `<span class="muted">프로필 링크 없음</span>`;
   const pdfBtn = pdf
-    ? `<a class="pdf-icon-btn" href="${esc(pdf.file_url)}" target="_blank" rel="noopener" title="이력서 PDF">📄</a>`
-    : `<span class="pdf-icon-btn is-disabled" title="PDF 없음">📄</span>`;
+    ? `<a class="pdf-open-btn" href="${esc(pdf.file_url)}" target="_blank" rel="noopener" title="이력서 PDF 열기">
+        ${Icon.file({ size: 18, className: "pdf-open-icon" })}
+        <span class="pdf-open-label">PDF 열기</span>
+        ${Icon.external({ size: 13, className: "pdf-open-ext" })}
+      </a>`
+    : `<span class="pdf-open-btn is-disabled" title="PDF 없음">
+        ${Icon.file({ size: 18, className: "pdf-open-icon" })}
+        <span class="pdf-open-label">PDF 없음</span>
+      </span>`;
   return `<div class="profile-link-row">${profileLink}${pdfBtn}</div>`;
 }
 
@@ -243,7 +251,7 @@ function wrapDetail(title, subtitle, bodyHtml, { badges = "" } = {}) {
         </div>
         ${subtitle ? `<p class="detail-sub">${subtitle}</p>` : ""}
       </div>
-      <button type="button" class="detail-close" id="btn-detail-close" aria-label="닫기">×</button>
+      <button type="button" class="detail-close" id="btn-detail-close" aria-label="닫기">${Icon.close({ size: 18 })}</button>
     </div>
     <div class="detail-scroll">${bodyHtml}</div>`;
 }
@@ -287,7 +295,7 @@ function renderTagChips(tags, { canRemove = false } = {}) {
         <span class="tag-author">${esc(staffNick(t.staff))}</span>
         ${
           canRemove && caps().canRecommend && t.tagged_by === staff?.id
-            ? `<button type="button" data-rm-tag="${esc(t.id)}" title="내 태그 제거">×</button>`
+            ? `<button type="button" data-rm-tag="${esc(t.id)}" title="내 태그 제거" class="icon-btn">${Icon.close({ size: 14 })}</button>`
             : ""
         }
       </span>`,
@@ -318,7 +326,7 @@ function openProfileSettings() {
             <h3 id="profile-title" style="margin:0">내 설정</h3>
             <p class="muted" style="margin:4px 0 0">${esc(staff.email || "")} · ${esc(roleLabel(staff.role))}</p>
           </div>
-          <button type="button" class="detail-close" id="pf-cancel" aria-label="닫기">×</button>
+          <button type="button" class="detail-close" id="pf-cancel" aria-label="닫기">${Icon.close({ size: 18 })}</button>
         </div>
         <div class="stack">
           <label>표시 이름</label>
@@ -883,11 +891,11 @@ async function renderPostingDetail(pane) {
         [
           "원본 링크",
           r.source_url
-            ? `<a href="${esc(r.source_url)}" target="_blank" rel="noopener">잡코리아에서 보기 ↗</a>`
+            ? `<a href="${esc(r.source_url)}" target="_blank" rel="noopener">잡코리아에서 보기 ${Icon.external({ size: 13, className: "inline-icon" })}</a>`
             : "—",
         ],
       ]),
-      { icon: "📋" },
+      { icon: Icon.clipboard({ size: 16 }) },
     )}
     <div class="detail-actions">
       <button type="button" class="btn btn-primary btn-sm" id="btn-view-apps">이 공고 지원자 보기</button>
@@ -950,12 +958,12 @@ async function renderApplicantDetail(pane) {
         ["이메일", esc(r.candidate?.email || "—")],
         ["전화", esc(r.candidate?.phone || "—")],
       ]),
-      { icon: "📞" },
+      { icon: Icon.phone({ size: 16 }) },
     ),
     detailSection(
       "프로필",
       `${renderProfileLinkRow(meta.detailUrl, docs)}${renderDocuments(docs)}`,
-      { icon: "🔗" },
+      { icon: Icon.link({ size: 16 }) },
     ),
     detailSection(
       "공고",
@@ -966,11 +974,11 @@ async function renderApplicantDetail(pane) {
         [
           "공고 보기",
           r.posting?.source_url
-            ? `<a href="${esc(r.posting.source_url)}" target="_blank" rel="noopener">잡코리아 공고 ↗</a>`
+            ? `<a href="${esc(r.posting.source_url)}" target="_blank" rel="noopener">잡코리아 공고 ${Icon.external({ size: 13, className: "inline-icon" })}</a>`
             : "—",
         ],
       ]),
-      { icon: "📋" },
+      { icon: Icon.clipboard({ size: 16 }) },
     ),
   ].join("");
 
@@ -980,7 +988,7 @@ async function renderApplicantDetail(pane) {
           <button type="button" class="btn btn-primary" id="btn-recommend">추천하기</button>
           <span class="muted detail-hint">별명 <b>${esc(staff?.nickname || "")}</b>으로 표시</span>
         </div>`
-      : `<p class="muted empty-inline">이력서 PDF는 프로필 링크 우측 📄 아이콘으로 열 수 있습니다.</p>`
+      : `<p class="muted empty-inline">이력서 PDF는 프로필 우측 <b>PDF 열기</b> 버튼으로 확인할 수 있습니다.</p>`
   }`;
 
   const tagsHtml = `
@@ -1046,7 +1054,7 @@ async function renderApplicantDetail(pane) {
             </div>`
           : ""
       }`,
-        { icon: "🗓️" },
+        { icon: Icon.calendar({ size: 16 }) },
       )}
       ${detailSection(
         "상태 변경",
@@ -1072,7 +1080,7 @@ async function renderApplicantDetail(pane) {
             : `<li class="muted">이력 없음</li>`
         }
       </ul>`,
-        { icon: "📊" },
+        { icon: Icon.chart({ size: 16 }) },
       )}`
     : detailSection(
         "상태 이력",
@@ -1090,13 +1098,13 @@ async function renderApplicantDetail(pane) {
             : `<li class="muted">이력 없음</li>`
         }
       </ul>`,
-        { icon: "📊" },
+        { icon: Icon.chart({ size: 16 }) },
       );
 
   const body = [
     profileHtml,
-    detailSection("이력서", docsHtml, { icon: "📄" }),
-    detailSection("추천 태그", tagsHtml, { icon: "⭐" }),
+    detailSection("이력서", docsHtml, { icon: Icon.file({ size: 16 }) }),
+    detailSection("추천 태그", tagsHtml, { icon: Icon.star({ size: 16 }) }),
     pipelineHtml,
   ].join("");
 
@@ -1255,7 +1263,7 @@ async function renderTalentDetail(pane) {
     detailSection(
       "프로필",
       `${renderProfileLinkRow(r.profile_url, docs)}${renderDocuments(docs)}`,
-      { icon: "🔗" },
+      { icon: Icon.link({ size: 16 }) },
     ),
   ].join("");
 
@@ -1265,7 +1273,7 @@ async function renderTalentDetail(pane) {
           <button type="button" class="btn btn-primary" id="btn-recommend">추천하기</button>
           <span class="muted detail-hint">별명 <b>${esc(staff?.nickname || "")}</b></span>
         </div>`
-      : `<p class="muted empty-inline">이력서 PDF는 프로필 링크 우측 📄 아이콘으로 열 수 있습니다.</p>`
+      : `<p class="muted empty-inline">이력서 PDF는 프로필 우측 <b>PDF 열기</b> 버튼으로 확인할 수 있습니다.</p>`
   }`;
 
   const tagsHtml = `
@@ -1303,14 +1311,14 @@ async function renderTalentDetail(pane) {
             : `<li class="muted">이력 없음</li>`
         }
       </ul>`,
-        { icon: "🚫" },
+        { icon: Icon.ban({ size: 16 }) },
       )
     : "";
 
   const body = [
     profileHtml,
-    detailSection("이력서", docsHtml, { icon: "📄" }),
-    detailSection("추천 태그", tagsHtml, { icon: "⭐" }),
+    detailSection("이력서", docsHtml, { icon: Icon.file({ size: 16 }) }),
+    detailSection("추천 태그", tagsHtml, { icon: Icon.star({ size: 16 }) }),
     blockHtml,
   ].join("");
 

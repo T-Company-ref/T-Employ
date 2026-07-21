@@ -9,11 +9,12 @@
 ## 일상 흐름 (평일)
 
 ```text
-06:30  (매월 1일만) session-refresh
 07:07  crawl-talent
+07:17  session-refresh
 07:27  pdf-applicants (누락분만)
 07:37  mail-morning-digest
 08:17~19:17  poll-applicants (매시)
+13:17  session-refresh (오후 재발급)
 ```
 
 신규 지원자 실시간 메일·다이제스트 규칙은 기존 `notifySchedule` / 메일 모듈을 따릅니다.

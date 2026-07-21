@@ -91,17 +91,17 @@ function tagHtml(tags: string[] | undefined): string {
     .join('')}</div>`;
 }
 
-/** 프로필 링크(좌) + PDF 이모지(우) */
+/** 프로필 링크(좌) + PDF 열기(우) */
 function profilePdfActions(
   profileUrl: string | null | undefined,
   pdfUrl: string | null | undefined,
 ): string {
   const profile = profileUrl
-    ? `<a href="${esc(profileUrl)}" style="color:#374151;font-weight:600;text-decoration:none">${tw(EMOJI.link, '프로필', 14)} 프로필 ↗</a>`
+    ? `<a href="${esc(profileUrl)}" style="color:#374151;font-weight:600;text-decoration:none">${tw(EMOJI.link, '프로필', 14)} 프로필</a>`
     : `<span style="color:#9ca3af">프로필 없음</span>`;
   const pdf = pdfUrl
-    ? `<a href="${esc(pdfUrl)}" style="font-size:18px;line-height:1;text-decoration:none" title="이력서 PDF">${tw(EMOJI.page, 'PDF', 16)}</a>`
-    : `<span style="opacity:0.35;font-size:18px;line-height:1" title="PDF 없음">${tw(EMOJI.page, '', 16)}</span>`;
+    ? `<a href="${esc(pdfUrl)}" style="display:inline-flex;align-items:center;gap:5px;padding:6px 10px;border-radius:8px;background:#dbeafe;border:1px solid #93c5fd;color:#1d4ed8;font-size:13px;font-weight:700;text-decoration:none;line-height:1" title="이력서 PDF 열기">${tw(EMOJI.page, 'PDF', 14)} PDF 열기</a>`
+    : `<span style="display:inline-flex;align-items:center;gap:5px;padding:6px 10px;border-radius:8px;background:#f3f4f6;border:1px solid #e5e7eb;color:#9ca3af;font-size:13px;font-weight:600;opacity:0.7" title="PDF 없음">${tw(EMOJI.page, '', 14)} PDF 없음</span>`;
   return `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:10px">
     <span>${profile}</span>
     <span>${pdf}</span>

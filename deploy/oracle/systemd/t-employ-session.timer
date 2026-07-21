@@ -1,9 +1,10 @@
 [Unit]
-Description=TBELL Employ — daily session refresh 06:30 KST
+Description=TBELL Employ — session refresh 07:17 & 13:17 KST (weekdays)
 Requires=t-employ-session.service
 
 [Timer]
-OnCalendar=*-*-* 06:30:00
+OnCalendar=Mon..Fri *-*-* 07:17:00
+OnCalendar=Mon..Fri *-*-* 13:17:00
 Timezone=Asia/Seoul
 Persistent=true
 Unit=t-employ-session.service
