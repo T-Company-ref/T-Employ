@@ -20,10 +20,9 @@ function parseLimit(): number | undefined {
     const n = Number(process.argv[idx + 1]);
     if (!Number.isNaN(n) && n > 0) return n;
   }
-  const fromEnv = Number(process.env.PDF_MAX_ITEMS || '');
+  const fromEnv = Number(process.env.PDF_MAX_ITEMS || process.env.PDF_BATCH_SIZE || '5');
   if (!Number.isNaN(fromEnv) && fromEnv > 0) return fromEnv;
-  if (process.env.PDF_MAX_ITEMS === '0') return undefined;
-  return undefined;
+  return 5;
 }
 
 async function main(): Promise<void> {
