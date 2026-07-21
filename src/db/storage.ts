@@ -14,7 +14,8 @@ export async function storeResumePdf(params: {
   pdf: Buffer;
 }): Promise<StoredFile> {
   const fileHash = createHash('sha256').update(params.pdf).digest('hex');
-  const objectPath = `${params.platform}/${params.ref}.pdf`;
+  // 해시 경로: 재수집 시 다른 내용으로 같은 ref 를 덮어쓰지 않음 (기존 정상 PDF 보존)
+  const objectPath = `${params.platform}/${params.ref}-${fileHash.slice(0, 16)}.pdf`;
 
   const supabaseUrl = env.supabaseUrl();
   const serviceKey = env.supabaseServiceRoleKey();

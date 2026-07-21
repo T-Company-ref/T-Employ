@@ -2,12 +2,10 @@ import { env } from '../config/env.js';
 import { loadRouteMap } from '../crawler/routeMap.js';
 import { openSession } from '../crawler/browser.js';
 import { getConnector } from '../crawler/connectors/index.js';
-import {
-  fetchJobkoreaResumePdf,
-  MIN_RESUME_PDF_BYTES,
-} from '../crawler/resume/jobkoreaResume.js';
+import { fetchJobkoreaResumePdf } from '../crawler/resume/jobkoreaResume.js';
 import { storeResumePdf } from '../db/storage.js';
 import { replaceTalentResumeDocument } from '../db/repositories/documents.js';
+import { needsPdfRefetch, probeStoredPdf } from '../db/probeStoredPdf.js';
 import { query } from '../db/client.js';
 
 export type TalentPdfTarget = {
@@ -24,16 +22,6 @@ export type TalentPdfBatchResult = {
   saved: number;
   failed: number;
 };
-
-async function pdfBytes(url: string): Promise<number | null> {
-  try {
-    const res = await fetch(url, { method: 'HEAD' });
-    const len = res.headers.get('content-length');
-    return len ? Number(len) : null;
-  } catch {
-    return null;
-  }
-}
 
 export async function ensureTalentCandidateIds(): Promise<number> {
   const rows = await query<{ id: string; headline: string | null; profile_ref: string }>(
@@ -81,8 +69,9 @@ export async function listBrokenTalents(limit?: number): Promise<TalentPdfTarget
     if (!row.file_url?.startsWith('http')) {
       out.push(row);
     } else {
-      const bytes = await pdfBytes(row.file_url);
-      if (bytes === null || bytes < MIN_RESUME_PDF_BYTES) out.push(row);
+      const probe = await probeStoredPdf(row.file_url);
+      // HEAD/네트워크 실패(unknown)는 재수집하지 않음 — 정상 PDF 덮어쓰기 방지
+      if (needsPdfRefetch(probe)) out.push(row);
     }
     if (limit != null && limit > 0 && out.length >= limit) break;
   }

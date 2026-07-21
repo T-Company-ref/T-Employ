@@ -2,9 +2,10 @@ import { env } from '../../config/env.js';
 import { loadRouteMap, resolveSelector } from '../routeMap.js';
 import { openSession } from '../browser.js';
 import { getConnector } from '../connectors/index.js';
-import { fetchApplicantResumeViaPopup, MIN_RESUME_PDF_BYTES } from './jobkoreaResume.js';
+import { fetchApplicantResumeViaPopup } from './jobkoreaResume.js';
 import { storeResumePdf } from '../../db/storage.js';
 import { replaceApplicationResumeDocument } from '../../db/repositories/documents.js';
+import { needsPdfRefetch, probeStoredPdf } from '../../db/probeStoredPdf.js';
 import { query } from '../../db/client.js';
 
 export type ApplicantPdfTarget = {
@@ -21,16 +22,6 @@ export type FetchApplicantPdfsResult = {
   failed: number;
   remaining: number;
 };
-
-async function pdfBytesFromUrl(url: string): Promise<number | null> {
-  try {
-    const res = await fetch(url, { method: 'HEAD' });
-    const len = res.headers.get('content-length');
-    return len ? Number(len) : null;
-  } catch {
-    return null;
-  }
-}
 
 async function listTargets(options: {
   onlyRef?: string;
@@ -68,8 +59,8 @@ async function listTargets(options: {
     if (!row.file_url?.startsWith('http')) {
       out.push(row);
     } else if (options.repairInvalid) {
-      const bytes = await pdfBytesFromUrl(row.file_url);
-      if (bytes === null || bytes < MIN_RESUME_PDF_BYTES) out.push(row);
+      const probe = await probeStoredPdf(row.file_url);
+      if (needsPdfRefetch(probe)) out.push(row);
     }
     if (options.limit != null && options.limit > 0 && out.length >= options.limit) break;
   }
