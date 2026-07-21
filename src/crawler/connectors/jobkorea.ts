@@ -90,10 +90,15 @@ export class JobkoreaConnector extends BaseConnector {
       const fetchLimit = Math.min(results.length, 8);
       for (let i = 0; i < fetchLimit; i++) {
         const rec = results[i];
-        if (!rec.profileUrl) continue;
+        if (!rec.profileUrl || rec.resumePdf) continue;
         const pdf = await fetchJobkoreaResumePdf(ctx.page, ctx.routeMap, rec.profileUrl, 'talent');
         if (pdf) rec.resumePdf = pdf;
-        await ctx.log('info', `인재 이력서 PDF ${pdf ? '저장' : '스킵'}`, { ref: rec.profileRef }, 'resume');
+        await ctx.log(
+          'info',
+          `인재 이력서 PDF ${pdf ? `저장(${pdf.length}B)` : '스킵'}`,
+          { ref: rec.profileRef },
+          'resume',
+        );
       }
     }
 

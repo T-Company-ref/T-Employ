@@ -98,6 +98,8 @@ export interface TalentProfileMeta {
   roles?: string[];
   skills?: string[];
   badges?: string[];
+  /** 구직/재직 상태 원문 (예: 구직중, 재직중, 취업완료) */
+  jobStatus?: string;
 }
 
 /** 커넥터가 반환하는 정규화된 인재검색 후보 레코드 */

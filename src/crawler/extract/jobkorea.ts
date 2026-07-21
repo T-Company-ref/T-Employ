@@ -181,6 +181,19 @@ export async function extractApplicantPage(
   return results;
 }
 
+function cleanTalentText(raw: string | null | undefined): string | undefined {
+  if (!raw) return undefined;
+  const cleaned = raw
+    .replace(/\u00a0/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/\b화살표\b/g, '')
+    .replace(/[▶►▸▹➔➜➝➞➡⇒⟶→←↑↓]/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  if (!cleaned || cleaned === '경력사항' || cleaned === '학력사항') return undefined;
+  return cleaned;
+}
+
 /** 현재 페이지의 인재검색 행을 카드 단위로 파싱한다. */
 export async function extractTalentPage(
   page: Page,
@@ -197,35 +210,55 @@ export async function extractTalentPage(
     const profileRef = await row.getAttribute('data-rno');
     if (!profileRef) continue;
 
-    const headline = (
-      await row.locator('.tdSummary .title strong, .tdSummary .title').first().textContent()
+    // strong 만 쓰면 화살표 span 이 섞이지 않음. 없으면 title 텍스트에서 노이즈 제거
+    const headlineStrong = (
+      await row.locator('.tdSummary .title strong').first().textContent().catch(() => null)
     )?.trim();
-    const name = (await row.locator('.nameAge dt, .devName').first().textContent())?.trim();
-    const genderAge = (await row.locator('.nameAge dd, .devAge').first().textContent())?.trim();
-    const careerText = (
-      await row.locator('.careerLayer dd, .devCareerYear').first().textContent()
+    const headlineRaw = headlineStrong
+      || (await row.locator('.tdSummary .title').first().textContent().catch(() => null))?.trim();
+    const headline = cleanTalentText(headlineRaw);
+
+    const name = cleanTalentText(
+      await row.locator('.nameAge dt, .devName').first().textContent().catch(() => null),
+    );
+    const genderAge = cleanTalentText(
+      await row.locator('.nameAge dd, .devAge').first().textContent().catch(() => null),
+    );
+    const careerText = cleanTalentText(
+      await row.locator('.careerLayer dd, .devCareerYear').first().textContent().catch(() => null),
+    );
+    const companyRaw = (
+      await row.locator('.careerLayer dt, .companyName, .devCareerCo').first().textContent().catch(() => null)
     )?.trim();
-    const company = (
-      await row.locator('.careerLayer dt, .companyName, .devCareerCo').first().textContent()
-    )?.trim();
+    const company = cleanTalentText(companyRaw);
 
     const roles = (
       await row.locator('.careerLayer .item, .devCareerItem, .jobList li, .devPart').allTextContents()
     )
-      .map((t) => t.trim())
-      .filter(Boolean);
+      .map((t) => cleanTalentText(t))
+      .filter((t): t is string => Boolean(t));
 
     const skills = (
       await row.locator('.keywordBox button, .keywordBox a, .devKeyword').allTextContents()
     )
-      .map((t) => t.trim())
-      .filter(Boolean);
+      .map((t) => cleanTalentText(t))
+      .filter((t): t is string => Boolean(t));
 
     const badges = (
       await row.locator('.hashTagArea a, .hashTagArea span, .devHashTag, .badgeList span').allTextContents()
     )
-      .map((t) => t.trim())
-      .filter(Boolean);
+      .map((t) => cleanTalentText(t))
+      .filter((t): t is string => Boolean(t));
+
+    const jobStatus = cleanTalentText(
+      await row
+        .locator(
+          '.hopeTxt, .jobState, .devJobState, .wishType, .tplStat, .stat, dd:has-text("구직"), dd:has-text("재직"), dd:has-text("취업")',
+        )
+        .first()
+        .textContent()
+        .catch(() => null),
+    );
 
     const href = await row.locator('a.dvResumeLink, a[href*="Resume"]').first().getAttribute('href');
 
@@ -236,6 +269,7 @@ export async function extractTalentPage(
       roles: roles.length ? roles : undefined,
       skills: skills.length ? skills : undefined,
       badges: badges.length ? badges : undefined,
+      jobStatus: jobStatus || undefined,
     };
 
     const summaryParts = [

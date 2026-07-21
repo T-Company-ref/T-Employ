@@ -1,34 +1,40 @@
 name: "DB save"
-description: "임베디드(PGlite) 스냅샷을 덤프해 db-snapshot 브랜치로 강제 푸시 (단일 커밋 유지, hosted Postgres 면 스킵)"
+description: "세션 번들(+PGlite 스냅샷)을 db-snapshot 브랜치로 푸시. hosted Postgres 는 세션만 저장"
 runs:
   using: "composite"
   steps:
-    - name: Dump & push snapshot
+    - name: Dump & push snapshot / sessions
       shell: bash
       run: |
-        if [[ "${DATABASE_URL:-}" == postgres* ]]; then
-          echo "[db-save] hosted Postgres 모드 — 스냅샷 저장 스킵"
-          exit 0
-        fi
         npm run db:dump
-        if [[ ! -f data/pgdata.tar.gz ]]; then
-          echo "[db-save] 스냅샷 파일이 없어 저장 중단"
-          exit 1
+
+        HAS_PG=0
+        HAS_SESS=0
+        [[ -f data/pgdata.tar.gz ]] && HAS_PG=1
+        [[ -f data/sessions-bundle.json ]] && HAS_SESS=1
+
+        if [[ "${DATABASE_URL:-}" == postgres* ]]; then
+          if [[ "$HAS_SESS" -ne 1 ]]; then
+            echo "[db-save] hosted Postgres — 세션 번들 없음, 저장 스킵"
+            exit 0
+          fi
+        else
+          if [[ "$HAS_PG" -ne 1 ]]; then
+            echo "[db-save] 스냅샷 파일이 없어 저장 중단"
+            exit 1
+          fi
         fi
+
         tmp="$(mktemp -d)"
-        cp data/pgdata.tar.gz "$tmp/pgdata.tar.gz"
-        if [[ -f data/sessions-bundle.json ]]; then
-          cp data/sessions-bundle.json "$tmp/sessions-bundle.json"
-        fi
+        [[ "$HAS_PG" -eq 1 ]] && cp data/pgdata.tar.gz "$tmp/pgdata.tar.gz"
+        [[ "$HAS_SESS" -eq 1 ]] && cp data/sessions-bundle.json "$tmp/sessions-bundle.json"
         cd "$tmp"
         git init -q
         git config user.name "t-employ-bot"
         git config user.email "t-employ-bot@users.noreply.github.com"
         git checkout -q -b db-snapshot
-        git add pgdata.tar.gz
-        if [[ -f sessions-bundle.json ]]; then
-          git add sessions-bundle.json
-        fi
+        [[ -f pgdata.tar.gz ]] && git add pgdata.tar.gz
+        [[ -f sessions-bundle.json ]] && git add sessions-bundle.json
         git commit -q -m "db snapshot $(date -u +%FT%TZ)"
         git push -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" db-snapshot
-        echo "[db-save] db-snapshot 브랜치로 스냅샷 강제 푸시 완료"
+        echo "[db-save] db-snapshot 푸시 완료 (pg=$HAS_PG sessions=$HAS_SESS)"

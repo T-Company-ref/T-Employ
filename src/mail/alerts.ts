@@ -7,6 +7,6 @@ export async function sendOpsAlert(subject: string, html: string): Promise<void>
     to: env.actionNotifyEmails(),
     subject,
     html,
-    allowDryRun: true,
+    allowDryRun: false,
   });
 }

@@ -46,31 +46,16 @@ function restoreSessionBundle(): void {
   console.log(`[persist] 세션 번들 복원: ${Object.keys(bundle).length} files → .sessions/`);
 }
 
-/** 라이브 DB → 스냅샷 파일 */
-async function dump(): Promise<void> {
-  if (env.dbDriver() === 'pg') {
-    console.log('[persist] hosted Postgres 모드 — 덤프 스킵');
-    return;
-  }
-  const { PGlite } = await import('@electric-sql/pglite');
-  const pg = await PGlite.create(liveDir());
-  const blob = await pg.dumpDataDir('gzip');
-  const buf = Buffer.from(await blob.arrayBuffer());
-  mkdirSync(dirname(SNAPSHOT), { recursive: true });
-  writeFileSync(SNAPSHOT, buf);
-  await pg.close();
-  dumpSessionBundle();
-  console.log(`[persist] 스냅샷 저장: ${SNAPSHOT} (${buf.length} bytes)`);
-}
-
-/** 스냅샷 파일 → 라이브 DB 디렉토리 */
+/** 스냅샷 파일 → 라이브 DB 디렉토리 (+ 세션 번들은 항상) */
 async function restore(): Promise<void> {
   if (env.dbDriver() === 'pg') {
-    console.log('[persist] hosted Postgres 모드 — 복원 스킵');
+    console.log('[persist] hosted Postgres 모드 — DB 복원 스킵, 세션 번들만 복원');
+    restoreSessionBundle();
     return;
   }
   if (!existsSync(SNAPSHOT)) {
     console.log('[persist] 스냅샷 없음 — 신규 DB 로 시작 (migrate 필요)');
+    restoreSessionBundle();
     return;
   }
   // 기존 라이브 디렉토리 제거 후 스냅샷에서 재구성
@@ -83,6 +68,23 @@ async function restore(): Promise<void> {
   await pg.close();
   restoreSessionBundle();
   console.log(`[persist] 스냅샷 복원 완료 → ${dir}`);
+}
+
+/** 라이브 DB → 스냅샷 파일 (세션 번들은 드라이버와 무관하게 항상) */
+async function dump(): Promise<void> {
+  dumpSessionBundle();
+  if (env.dbDriver() === 'pg') {
+    console.log('[persist] hosted Postgres 모드 — DB 덤프 스킵 (세션 번들만 저장)');
+    return;
+  }
+  const { PGlite } = await import('@electric-sql/pglite');
+  const pg = await PGlite.create(liveDir());
+  const blob = await pg.dumpDataDir('gzip');
+  const buf = Buffer.from(await blob.arrayBuffer());
+  mkdirSync(dirname(SNAPSHOT), { recursive: true });
+  writeFileSync(SNAPSHOT, buf);
+  await pg.close();
+  console.log(`[persist] 스냅샷 저장: ${SNAPSHOT} (${buf.length} bytes)`);
 }
 
 async function main(): Promise<void> {

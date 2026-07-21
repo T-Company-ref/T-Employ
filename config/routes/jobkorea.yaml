@@ -73,8 +73,11 @@ selectors:
   talent_ready: "#dvResumeList tr.dvResumeTr"
   talent_next_page: ".pagenation.js-GICndtPaging a[data-page-no]"
   # 이력서 인쇄
-  talent_print_btn: 'button.devPrint, a.devPrint, a.print-icon, button:has-text("인쇄")'
-  applicant_print_btn: 'a.print-icon, button.print-icon, .print-icon, button:has-text("인쇄"), a:has-text("인쇄하기")'
+  talent_print_btn: 'button.dev-print, button.devPrint, a.devPrint, a.print-icon, button.print-icon, button:has-text("인쇄하기"), button:has-text("인쇄")'
+  applicant_print_btn: 'a.print-icon, button.print-icon, .print-icon, button.dev-print, button:has-text("인쇄"), a:has-text("인쇄하기")'
+  # 지원자: 체크박스 / 인재 PrintAgree 팝업: 라디오 #lb_agree_1 + .devBtnPrint
   resume_print_agree: '#devAgreeChk, input[type="checkbox"][name*="agree"], .agree-check input, label:has-text("동의") input'
   resume_print_confirm: 'button.devConfirm, button:has-text("확인"), button:has-text("동의")'
+  talent_print_agree: '#lb_agree_1, input[type="radio"][name="agree_1"]'
+  talent_print_confirm: 'button.devBtnPrint, button.tplBtnNavy.devBtnPrint'
   resume_print_area: '#devPrintArea, #printArea, .resumePrint, .printArea, .devResumePrint'

@@ -1,0 +1,12 @@
+[Unit]
+Description=TBELL Employ — poll applicants every 15m (weekdays; job skips off-hours)
+Requires=t-employ-poll.service
+
+[Timer]
+OnCalendar=*-*-* *:00,15,30,45:00
+Timezone=Asia/Seoul
+Persistent=true
+Unit=t-employ-poll.service
+
+[Install]
+WantedBy=timers.target

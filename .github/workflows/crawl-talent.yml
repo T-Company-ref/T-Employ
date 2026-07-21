@@ -1,0 +1,70 @@
+name: crawl-talent
+
+# ?∏Ïû¨ Î™©Î°ù ?òÏßë ??Playwright ?ÑÏöî. ?âÏùº 1??(07:07 KST)
+on:
+  schedule:
+    # 07:07 KST Mon?ìFri = 22:07 UTC Sun?ìThu
+    - cron: "7 22 * * 0-4"
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: "?åÎû´??(Í∏∞Î≥∏ jobkorea)"
+        required: false
+        default: "jobkorea"
+      limit:
+        description: "ÏµúÎ? ?òÏßë Í±¥Ïàò"
+        required: false
+        default: "20"
+
+concurrency:
+  group: t-employ-db-write
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      PGSSL: ${{ secrets.DATABASE_URL != '' && 'true' || 'false' }}
+      GITHUB_TOKEN: ${{ github.token }}
+      JOBKOREA_USERNAME: ${{ secrets.JOBKOREA_USERNAME }}
+      JOBKOREA_PASSWORD: ${{ secrets.JOBKOREA_PASSWORD }}
+      HEADLESS: "true"
+      AUTO_CRAWL_ENABLED: "true"
+      CRAWL_MAX_ITEMS: ${{ github.event.inputs.limit || '20' }}
+      CRAWL_FETCH_RESUMES: "false"
+      GMAIL_USER: ${{ secrets.GMAIL_USER }}
+      GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+      MAIL_FROM: ${{ secrets.MAIL_FROM }}
+      ACTION_NOTIFY_EMAIL: ${{ vars.ACTION_NOTIFY_EMAIL || 'yj.kim@tbell.co.kr' }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      T_EMPLOY_WORKFLOW: crawl-talent
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - run: npx playwright install --with-deps chromium
+      - uses: ./.github/actions/db-load
+      - name: Crawl talent
+        run: npm run crawl:talent -- "${{ github.event.inputs.platform || 'jobkorea' }}"
+      - name: Save sessions
+        if: always()
+        uses: ./.github/actions/db-save
+      - name: Notify result
+        if: failure()
+        uses: ./.github/actions/notify-result
+        with:
+          conclusion: ${{ job.status }}

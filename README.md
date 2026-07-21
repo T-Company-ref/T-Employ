@@ -2,10 +2,10 @@
 
 TBELL 채용 지원자/인재검색 통합 수집·관리 시스템.
 
-- 매일 18:00 KST: 활성 플랫폼에서 공고 지원자 및 인재검색 후보 순차 수집
-- 다음날 08:00 KST: 전일 요약 메일 자동 발송
+- **현재 운영:** GitHub Actions 배치 (평일 폴링·인재·PDF·아침 메일) — `docs/deploy/GITHUB_ACTIONS.md`
 - 공고 지원자(Applicants)와 인재검색 후보(Talent Pool) 분리 운영
 - 추천 태그(작성자 추적), 면접 일정/결과, 소프트 삭제 상태 관리
+- **선택:** Oracle VM 상시 서버 — `docs/ops/oracle-deploy.md` (Actions와 동시 가동 금지)
 
 ## 현재 진행 상태 (2026-07-10)
 
@@ -22,7 +22,7 @@ TBELL 채용 지원자/인재검색 통합 수집·관리 시스템.
 |--------|------|------|
 | Collector | Playwright + Route Map | 로그인/네비게이션/수집 |
 | Data | 임베디드 Postgres(PGlite) 기본 · 호스티드 Postgres 선택 | 관계형 데이터 저장 |
-| Automation | GitHub Actions (cron) | 18:00 수집 / 08:00 메일 / 스냅샷 지속 |
+| Automation | GitHub Actions (배치 cron) | poll / talent / pdf / digest / session · 세션은 db-snapshot |
 | UI | GitHub Pages (`web/`) | 로그인·지원자/인재·태그/면접/블락 |
 
 DB는 **계정·Docker·설치 없이** 임베디드 PostgreSQL(PGlite)로 바로 동작한다.
@@ -62,8 +62,11 @@ npm run typecheck
 | `npm run db:dump` | 임베디드 DB → 스냅샷(`data/pgdata.tar.gz`) |
 | `npm run db:restore` | 스냅샷 → 임베디드 DB 복원 |
 | `npm run db:supabase` | Supabase 전용 RLS/auth 정책 적용 (`db/supabase/*.sql`) |
-| `npm run crawl:applicants [platform]` | 공고 지원자 수집 |
+| `npm run poll:applicants` | 지원자 경량 폴링 (HTTP, Playwright 없음) |
+| `npm run crawl:applicants [platform]` | 공고 지원자 풀 크롤 (비상·Playwright) |
 | `npm run crawl:talent [platform]` | 인재검색 후보 수집 |
+| `npm run pdf:applicants` | 누락 지원자 PDF |
+| `npm run mail:morning-digest` | 아침 다이제스트 |
 | `npm run session:refresh [platform]` | 세션 삭제 후 재로그인 (CI 복구용) |
 | `npm run report:compose` | 전일 요약 생성 + 메일 큐 등록 |
 | `npm run mail:send` | 요약 메일 발송 |

@@ -39,3 +39,34 @@ export async function recordHealth(
     [platform, ok ? 'ok' : 'fail', ok, lastError ?? null],
   );
 }
+
+export type PlatformHealthRow = {
+  platform: string;
+  status: string | null;
+  last_ok_at: Date | string | null;
+  last_error: string | null;
+  fail_count_24h: number | null;
+};
+
+export async function getPlatformHealth(platform: Platform): Promise<PlatformHealthRow | null> {
+  const res = await query<PlatformHealthRow>(
+    `SELECT platform, status, last_ok_at, last_error, fail_count_24h
+     FROM platform_health WHERE platform = $1`,
+    [platform],
+  );
+  return res.rows[0] ?? null;
+}
+
+/** 지원자 크롤/폴링 마지막 성공 시각 */
+export async function getLastApplicantsSuccessAt(): Promise<Date | null> {
+  const res = await query<{ finished_at: Date | string | null }>(
+    `SELECT finished_at
+     FROM crawl_jobs
+     WHERE job_type = 'applicants' AND status = 'succeeded' AND finished_at IS NOT NULL
+     ORDER BY finished_at DESC
+     LIMIT 1`,
+  );
+  const v = res.rows[0]?.finished_at;
+  if (!v) return null;
+  return v instanceof Date ? v : new Date(v);
+}

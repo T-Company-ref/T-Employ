@@ -8,7 +8,7 @@ import { getConnector } from './connectors/index.js';
 import type { CrawlContext } from './types.js';
 import { createJob, finishJob, logJob, recordFailure } from '../db/repositories/crawlJobs.js';
 import { recordHealth, type PlatformConfig } from '../db/repositories/platform.js';
-import { upsertApplicants } from '../db/repositories/applicants.js';
+import { upsertApplicants, type NewApplicantBrief } from '../db/repositories/applicants.js';
 import { upsertTalents } from '../db/repositories/talentPool.js';
 import { upsertSessionMeta } from '../db/repositories/sessions.js';
 
@@ -19,6 +19,8 @@ export interface RunResult {
   skipped?: boolean;
   inserted?: number;
   updated?: number;
+  resumesSaved?: number;
+  newItems?: NewApplicantBrief[];
   error?: string;
   attempts?: number;
 }
@@ -63,7 +65,16 @@ export async function runPlatform(
 
   const routeMap = loadRouteMap(platform);
   const connector = getConnector(platform);
-  const session = await openSession(platform);
+  let session: Awaited<ReturnType<typeof openSession>>;
+  try {
+    session = await openSession(platform);
+  } catch (err) {
+    const message = (err as Error).message;
+    await finishJob(job.id, 'failed', { result: { error: message } });
+    await recordHealth(platform, false, message);
+    return { platform, error: message };
+  }
+
   const timeoutMs = options.timeoutMs ?? 30_000;
 
   const ctx: CrawlContext = {
@@ -88,31 +99,36 @@ export async function runPlatform(
 
     let inserted = 0;
     let updated = 0;
+    let resumesSaved = 0;
+    let newItems: NewApplicantBrief[] | undefined;
 
     if (kind === 'applicants') {
       const records = await connector.crawlApplicants(ctx);
       const res = await upsertApplicants(records);
       inserted = res.inserted;
       updated = res.updated;
-      if (res.resumesSaved) {
-        await ctx.log('info', `이력서 PDF ${res.resumesSaved}건 저장`, undefined, 'resume');
+      resumesSaved = res.resumesSaved ?? 0;
+      newItems = res.newItems;
+      if (resumesSaved) {
+        await ctx.log('info', `이력서 PDF ${resumesSaved}건 저장`, undefined, 'resume');
       }
     } else {
       const records = await connector.crawlTalentPool(ctx);
       const res = await upsertTalents(records);
       inserted = res.inserted;
       updated = res.updated;
-      if (res.resumesSaved) {
-        await ctx.log('info', `이력서 PDF ${res.resumesSaved}건 저장`, undefined, 'resume');
+      resumesSaved = res.resumesSaved ?? 0;
+      if (resumesSaved) {
+        await ctx.log('info', `이력서 PDF ${resumesSaved}건 저장`, undefined, 'resume');
       }
     }
 
     await finishJob(job.id, 'succeeded', {
-      stats: { inserted, updated },
-      result: { kind, inserted, updated },
+      stats: { inserted, updated, resumesSaved },
+      result: { kind, inserted, updated, resumesSaved },
     });
     await recordHealth(platform, true);
-    return { platform, inserted, updated };
+    return { platform, inserted, updated, resumesSaved, newItems };
   } catch (err) {
     const message = (err as Error).message;
     const shot = await session.screenshot(`fail_${kind}`).catch(() => null);

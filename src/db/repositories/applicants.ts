@@ -3,10 +3,20 @@ import type { NormalizedApplicant } from '../types.js';
 import { storeResumePdf } from '../storage.js';
 import { upsertCandidateDocument } from './documents.js';
 
+export interface NewApplicantBrief {
+  applicationId: string;
+  name: string | null;
+  postingTitle: string | null;
+  platform: string;
+  appliedAt: string | null;
+  externalRef: string;
+}
+
 export interface UpsertResult {
   inserted: number;
   updated: number;
   resumesSaved?: number;
+  newItems: NewApplicantBrief[];
 }
 
 /**
@@ -18,6 +28,7 @@ export async function upsertApplicants(
   let inserted = 0;
   let updated = 0;
   let resumesSaved = 0;
+  const newItems: NewApplicantBrief[] = [];
 
   const pendingResumes: Array<{
     candidateId: string;
@@ -103,8 +114,19 @@ export async function upsertApplicants(
         ],
       );
 
-      if (app.rows[0].is_new) inserted += 1;
-      else updated += 1;
+      if (app.rows[0].is_new) {
+        inserted += 1;
+        newItems.push({
+          applicationId: app.rows[0].id,
+          name: rec.name ?? null,
+          postingTitle: rec.postingTitle ?? null,
+          platform: rec.platform,
+          appliedAt: rec.appliedAt ?? null,
+          externalRef: rec.externalRef,
+        });
+      } else {
+        updated += 1;
+      }
 
       if (rec.resumePdf) {
         pendingResumes.push({
@@ -136,5 +158,5 @@ export async function upsertApplicants(
     }
   }
 
-  return { inserted, updated, resumesSaved };
+  return { inserted, updated, resumesSaved, newItems };
 }

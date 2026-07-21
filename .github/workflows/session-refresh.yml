@@ -1,0 +1,92 @@
+name: session-refresh
+
+# ?¸ì…˜ ê°±ì‹  ??ë§¤ì›” 1??KST 1??06:30) + ?˜ë™. Playwright ?„ìš”.
+on:
+  schedule:
+    # ë§¤ì¼ 21:30 UTC (= 06:30 KST) ??gate ?ì„œ KST 1?¼ë§Œ ë³??‘ì—… ?¤í–‰
+    - cron: "30 21 * * *"
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: "?¸ì…˜ ?¬ë°œê¸??€??
+        required: true
+        default: "jobkorea"
+      notify_ok:
+        description: "?±ê³µ ?œì—??ë©”ì¼ (true/false)"
+        required: false
+        default: "true"
+
+concurrency:
+  group: t-employ-db-write
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      should_run: ${{ steps.check.outputs.should_run }}
+    steps:
+      - id: check
+        run: |
+          if [[ "${{ github.event_name }}" != "schedule" ]]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          day=$(TZ=Asia/Seoul date +%d)
+          echo "KST day=$day"
+          if [[ "$day" == "01" ]]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            echo "Not the 1st KST ??skip monthly session refresh"
+          fi
+
+  refresh:
+    needs: gate
+    if: needs.gate.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      PGSSL: ${{ secrets.DATABASE_URL != '' && 'true' || 'false' }}
+      GITHUB_TOKEN: ${{ github.token }}
+      JOBKOREA_USERNAME: ${{ secrets.JOBKOREA_USERNAME }}
+      JOBKOREA_PASSWORD: ${{ secrets.JOBKOREA_PASSWORD }}
+      HEADLESS: "true"
+      AUTO_CRAWL_ENABLED: "true"
+      GMAIL_USER: ${{ secrets.GMAIL_USER }}
+      GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+      MAIL_FROM: ${{ secrets.MAIL_FROM }}
+      ACTION_NOTIFY_EMAIL: ${{ vars.ACTION_NOTIFY_EMAIL || 'yj.kim@tbell.co.kr' }}
+      T_EMPLOY_WORKFLOW: session-refresh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - run: npx playwright install --with-deps chromium
+      - uses: ./.github/actions/db-load
+      - name: Refresh session
+        run: |
+          EXTRA=""
+          if [[ "${{ github.event.inputs.notify_ok || 'true' }}" == "true" ]]; then EXTRA="--notify-ok"; fi
+          npm run session:refresh -- "${{ github.event.inputs.platform || 'jobkorea' }}" $EXTRA
+      - name: Save sessions
+        if: success()
+        uses: ./.github/actions/db-save
+      - name: Notify result
+        if: failure()
+        uses: ./.github/actions/notify-result
+        with:
+          conclusion: ${{ job.status }}

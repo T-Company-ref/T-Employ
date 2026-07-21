@@ -28,7 +28,7 @@ export async function createJob(params: {
   requestedBy?: string;
   triggerType?: 'manual' | 'schedule';
 }): Promise<CrawlJob | null> {
-  await releaseStaleJobs();
+  await releaseStaleJobs(1);
   const res = await query<CrawlJob>(
     `INSERT INTO crawl_jobs (job_type, platform, requested_by, trigger_type, status, started_at)
      VALUES ($1, $2, $3, $4, 'running', now())

@@ -116,5 +116,5 @@ export async function upsertTalents(records: NormalizedTalent[]): Promise<Talent
     }
   }
 
-  return { inserted, updated, resumesSaved };
+  return { inserted, updated, resumesSaved, newItems: [] };
 }

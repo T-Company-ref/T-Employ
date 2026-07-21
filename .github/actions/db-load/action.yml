@@ -1,23 +1,26 @@
 name: "DB load"
-description: "임베디드(PGlite) 스냅샷을 db-snapshot 브랜치에서 복원하고 마이그레이션 실행 (hosted Postgres 면 복원 스킵)"
+description: "DB 스냅샷(PGlite) 및 세션 번들을 db-snapshot 에서 복원. hosted Postgres 는 세션만 복원 + migrate"
 runs:
   using: "composite"
   steps:
-    - name: Fetch & restore snapshot
+    - name: Fetch & restore snapshot / sessions
       shell: bash
       run: |
+        mkdir -p data
+        git fetch origin db-snapshot:db-snapshot --depth=1 2>/dev/null || echo "[db-load] db-snapshot 브랜치 없음"
+
+        if git cat-file -e db-snapshot:sessions-bundle.json 2>/dev/null; then
+          git show db-snapshot:sessions-bundle.json > data/sessions-bundle.json
+          echo "[db-load] 세션 번들 확보"
+        fi
+
         if [[ "${DATABASE_URL:-}" == postgres* ]]; then
-          echo "[db-load] hosted Postgres 모드 — 스냅샷 복원 스킵"
+          echo "[db-load] hosted Postgres — DB 스냅샷 스킵, 세션만 복원"
+          npm run db:restore
         else
-          git fetch origin db-snapshot:db-snapshot --depth=1 2>/dev/null || echo "[db-load] db-snapshot 브랜치 없음 — 신규 DB 시작"
-          mkdir -p data
           if git cat-file -e db-snapshot:pgdata.tar.gz 2>/dev/null; then
             git show db-snapshot:pgdata.tar.gz > data/pgdata.tar.gz
             echo "[db-load] 스냅샷 파일 확보"
-          fi
-          if git cat-file -e db-snapshot:sessions-bundle.json 2>/dev/null; then
-            git show db-snapshot:sessions-bundle.json > data/sessions-bundle.json
-            echo "[db-load] 세션 번들 확보"
           fi
           npm run db:restore
         fi

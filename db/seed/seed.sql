@@ -37,3 +37,12 @@ ON CONFLICT (nickname) DO UPDATE SET
   email = EXCLUDED.email,
   display_name = EXCLUDED.display_name,
   role = EXCLUDED.role;
+
+INSERT INTO staff_profiles (nickname, display_name, email, role)
+VALUES
+  ('jonghyuk.kim', '김종혁', 'jonghyuk.kim@tbell.co.kr', 'viewer'),
+  ('hj.joo', '주현진', 'hj.joo@tbell.co.kr', 'viewer')
+ON CONFLICT (nickname) DO UPDATE SET
+  email = EXCLUDED.email,
+  display_name = EXCLUDED.display_name,
+  role = EXCLUDED.role;
