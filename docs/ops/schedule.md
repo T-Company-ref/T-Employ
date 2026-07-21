@@ -9,7 +9,7 @@
 
 | Job | Workflow / npm | 기술 | 주기 (KST) |
 |-----|----------------|------|------------|
-| 세션 갱신 | `session-refresh` / `session:refresh` | Playwright | 평일 **07:17 · 13:17** + 수동 |
+| 세션 갱신 | `session-refresh` / `session:refresh` | Playwright | 평일 **06:47 · 13:17** + 수동 |
 | 인재 수집 | `crawl-talent` / `crawl:talent` | Playwright | 평일 **07:07** |
 | 지원자 PDF | `pdf-applicants` / `pdf:applicants` | Playwright 인쇄 | 평일 **07:27** + 수동 (누락분만) |
 | 아침 다이제스트 | `mail-morning-digest` / `mail:morning-digest` | DB + SMTP (브라우저 없음) | 평일 **07:37** |

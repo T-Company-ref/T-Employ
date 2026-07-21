@@ -9,8 +9,8 @@
 ## 일상 흐름 (평일)
 
 ```text
+06:47  session-refresh
 07:07  crawl-talent
-07:17  session-refresh
 07:27  pdf-applicants (누락분만)
 07:37  mail-morning-digest
 08:17~19:17  poll-applicants (매시)

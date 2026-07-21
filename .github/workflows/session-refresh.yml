@@ -1,11 +1,12 @@
 name: session-refresh
 
 # JobKorea session refresh twice daily (session TTL ~5?6h) + manual.
-# KST 07:17 / 13:17 weekdays ? covers poll window 08:17?19:17.
+# Morning BEFORE talent crawl (07:07); afternoon mid-poll window.
+# KST 06:47 / 13:17 weekdays.
 on:
   schedule:
-    # 07:17 KST Mon-Fri = 22:17 UTC Sun-Thu
-    - cron: "17 22 * * 0-4"
+    # 06:47 KST Mon-Fri = 21:47 UTC Sun-Thu
+    - cron: "47 21 * * 0-4"
     # 13:17 KST Mon-Fri = 04:17 UTC Mon-Fri
     - cron: "17 4 * * 1-5"
   workflow_dispatch:
