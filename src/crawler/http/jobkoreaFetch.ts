@@ -74,7 +74,8 @@ export async function fetchJobkoreaHtml(
       if (err instanceof SessionExpiredError) throw err;
       if (!isTransientNetworkError(err) || attempt >= retries) throw err;
       console.warn(
-        `[fetch] transient retry ${attempt + 1}/${retries}: ${err instanceof Error ? err.message : err}`,
+        `[fetch] transient retry ${attempt + 1}/${retries}: ${err instanceof Error ? err.message : err}` +
+          (err instanceof Error && err.cause instanceof Error ? ` cause=${err.cause.message}` : ''),
       );
       await sleep(800 * (attempt + 1));
     }

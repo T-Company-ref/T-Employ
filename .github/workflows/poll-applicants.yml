@@ -57,7 +57,10 @@ jobs:
       - run: npm ci
       - name: Load sessions (+ DB migrate)
         uses: ./.github/actions/db-load
-      - name: Poll applicants (no Playwright)
+      - name: Poll applicants
+        env:
+          # Actions undici fetch 는 잡코리아에서 자주 실패 → Playwright request 사용
+          POLL_USE_PLAYWRIGHT: "true"
         run: |
           EXTRA=""
           if [[ "${{ github.event.inputs.dry_run }}" == "true" ]]; then EXTRA="--dry-run"; fi
