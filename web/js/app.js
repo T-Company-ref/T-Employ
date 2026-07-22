@@ -1014,10 +1014,7 @@ async function renderApplicantDetail(pane) {
     meta.careerHistory?.length ? renderChips(meta.careerHistory) : "",
     detailSection(
       "연락처",
-      infoRows([
-        ["이메일", esc(r.candidate?.email || "—")],
-        ["전화", esc(r.candidate?.phone || "—")],
-      ]),
+      infoRows([["이메일", esc(r.candidate?.email || "—")]]),
       { icon: Icon.phone({ size: 16 }) },
     ),
     detailSection(
