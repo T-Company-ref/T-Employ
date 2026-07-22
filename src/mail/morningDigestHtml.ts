@@ -3,8 +3,7 @@
  */
 import type { ApplicantAlertRow } from '../db/repositories/applicantAlerts.js';
 import type { TalentAlertRow } from '../db/repositories/talentAlerts.js';
-import type { DigestReportSlices, KstParts } from './notifySchedule.js';
-import { toKstParts } from './notifySchedule.js';
+import { docsPackHtml } from './docsPackHtml.js';
 
 const TWEMOJI = 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg';
 const WEEKDAY_KO = ['일', '월', '화', '수', '목', '금', '토'];
@@ -100,7 +99,7 @@ function applicantRows(items: ApplicantAlertRow[], showNew = false): string {
         <td style="padding:12px;font-size:13px;font-weight:700;color:#0f172a;white-space:nowrap;border-bottom:1px solid #eef2f7">${esc(item.name || '(이름 없음)')}${badge}</td>
         <td style="padding:12px;font-size:13px;color:#475569;white-space:nowrap;border-bottom:1px solid #eef2f7">${fmtTime(item.appliedAt)}</td>
         <td style="padding:12px;font-size:12px;color:#64748b;border-bottom:1px solid #eef2f7">${esc(item.careerTotal || '—')}</td>
-        <td style="padding:12px;text-align:center;border-bottom:1px solid #eef2f7">${linkBtn(item.pdfUrl, 'PDF 열기', 'pdf')}</td>
+        <td style="padding:12px;border-bottom:1px solid #eef2f7">${docsPackHtml({ resumeUrl: item.pdfUrl, attachments: item.attachments })}</td>
         <td style="padding:12px;text-align:center;border-bottom:1px solid #eef2f7">${linkBtn(appListHref(item), '지원자 목록', 'primary')}</td>
       </tr>`;
     })
@@ -176,7 +175,7 @@ function kpi(label: string, value: string, sub: string, color: string, soft: str
   </td>`;
 }
 
-const APP_HEAD = `${th('채용공고')}${th('이름')}${th('지원시각')}${th('경력')}${th('이력서', 'center')}${th('이동', 'center')}`;
+const APP_HEAD = `${th('채용공고')}${th('이름')}${th('지원시각')}${th('경력')}${th('서류')}${th('이동', 'center')}`;
 const TALENT_HEAD = `${th('이름')}${th('직무')}${th('경력')}${th('핵심 역량')}${th('프로필 · PDF', 'center')}`;
 
 export function buildMorningDigestHtml(params: {
@@ -248,7 +247,7 @@ export function buildMorningDigestHtml(params: {
         <div style="font-size:12px;font-weight:800;color:#1d4ed8;margin-bottom:4px">TIP</div>
         <div style="font-size:12px;color:#334155;line-height:1.6">
           지원자 <b>지원자 목록</b>은 잡코리아 해당 공고의 지원자 리스트로 이동합니다.
-          인재는 <b>프로필</b>에서 원문을, <b>PDF 열기</b>로 저장된 이력서를 확인하세요.
+          지원자 <b>서류</b>란은 이력서 PDF와 첨부(포트폴리오 등) 파일명을 링크로 모아 둡니다. 버튼이 여러 개 생기지 않도록 파일명 텍스트 링크만 사용합니다.
         </div>
       </div>
       <p style="margin:16px 0 0;font-size:11px;color:#94a3b8;text-align:center">TBELL Employ 자동 발송 · 알림 설정은 웹 프로필에서 변경할 수 있습니다.</p>

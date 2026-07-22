@@ -20,6 +20,7 @@ import {
   type DigestReportSlices,
 } from './notifySchedule.js';
 import { buildMorningDigestHtml, morningDigestSubject } from './morningDigestHtml.js';
+import { docsPackHtml } from './docsPackHtml.js';
 
 /** Twemoji SVG (jsDelivr) — 메일 클라이언트용 <img> */
 const TWEMOJI = 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg';
@@ -93,7 +94,7 @@ function tagHtml(tags: string[] | undefined): string {
     .join('')}</div>`;
 }
 
-/** 프로필 링크(좌) + PDF 열기(우) */
+/** 프로필 링크(좌) + PDF 열기(우) — 인재용 */
 function profilePdfActions(
   profileUrl: string | null | undefined,
   pdfUrl: string | null | undefined,
@@ -141,9 +142,14 @@ function applicantCards(items: ApplicantAlertRow[]): string {
           ${careerBits ? `<div style="color:#6b7280;font-size:12px;margin-top:4px">${esc(careerBits)}</div>` : ''}
           ${tagHtml(item.recommendTags)}
         </td>
-        <td style="padding:14px 12px;border-bottom:1px solid #e5e7eb;vertical-align:top;white-space:nowrap;text-align:right">
-          <div style="font-size:13px">${tw(EMOJI.calendar, '', 14)} ${fmtDate(item.appliedAt)}</div>
-          ${profilePdfActions(item.detailUrl, item.pdfUrl)}
+        <td style="padding:14px 12px;border-bottom:1px solid #e5e7eb;vertical-align:top;text-align:left;min-width:160px">
+          <div style="font-size:13px;margin-bottom:8px">${tw(EMOJI.calendar, '', 14)} ${fmtDate(item.appliedAt)}</div>
+          ${docsPackHtml({ resumeUrl: item.pdfUrl, attachments: item.attachments })}
+          ${
+            item.applicantListUrl
+              ? `<div style="margin-top:8px"><a href="${esc(item.applicantListUrl)}" style="color:#1e3a8a;font-size:12px;font-weight:700;text-decoration:none">지원자 목록 →</a></div>`
+              : ''
+          }
         </td>
       </tr>`;
       })

@@ -3,6 +3,7 @@ import type { NormalizedTalent } from '../types.js';
 import type { UpsertResult } from './applicants.js';
 import { storeResumePdf } from '../storage.js';
 import { upsertCandidateDocument } from './documents.js';
+import { classifyTalentProfile } from '../../domain/jobCategories.js';
 
 export interface TalentUpsertResult extends UpsertResult {
   resumesSaved: number;
@@ -56,11 +57,19 @@ export async function upsertTalents(records: NormalizedTalent[]): Promise<Talent
       }
 
       const metaJson = JSON.stringify(rec.profileMeta ?? {});
+      const category = classifyTalentProfile({
+        headline: rec.headline,
+        summaryText: rec.summaryText,
+        searchCondition: rec.searchCondition,
+        skills: rec.profileMeta?.skills,
+        roles: rec.profileMeta?.roles,
+        badges: rec.profileMeta?.badges,
+      });
 
       const res = await client.query<{ id: string; is_new: boolean }>(
         `INSERT INTO talent_pool_candidates
-           (platform, profile_ref, profile_url, headline, summary_text, search_condition, sourced_at, candidate_id, profile_meta)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
+           (platform, profile_ref, profile_url, headline, summary_text, search_condition, sourced_at, candidate_id, profile_meta, category)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10)
          ON CONFLICT (platform, profile_ref)
          DO UPDATE SET
            profile_url = EXCLUDED.profile_url,
@@ -69,7 +78,8 @@ export async function upsertTalents(records: NormalizedTalent[]): Promise<Talent
            search_condition = EXCLUDED.search_condition,
            sourced_at = EXCLUDED.sourced_at,
            candidate_id = COALESCE(EXCLUDED.candidate_id, talent_pool_candidates.candidate_id),
-           profile_meta = EXCLUDED.profile_meta
+           profile_meta = EXCLUDED.profile_meta,
+           category = COALESCE(EXCLUDED.category, talent_pool_candidates.category)
          RETURNING id, (xmax = 0) AS is_new`,
         [
           rec.platform,
@@ -81,6 +91,7 @@ export async function upsertTalents(records: NormalizedTalent[]): Promise<Talent
           rec.sourcedAt,
           candidateId,
           metaJson,
+          category,
         ],
       );
 

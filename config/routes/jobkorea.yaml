@@ -80,4 +80,7 @@ selectors:
   resume_print_confirm: 'button.devConfirm, button:has-text("확인"), button:has-text("동의")'
   talent_print_agree: '#lb_agree_1, input[type="radio"][name="agree_1"]'
   talent_print_confirm: 'button.devBtnPrint, button.tplBtnNavy.devBtnPrint'
-  resume_print_area: '#devPrintArea, #printArea, .resumePrint, .printArea, .devResumePrint'
+  # 첨부/포트폴리오 (지원자 상세)
+  applicant_attach_root: ".base.portfolio, .portfolio"
+  applicant_attach_link: '.base.portfolio a[href*="/files/"], .base.portfolio a[href*="download"]'
+  applicant_download_btn: "button.button-download, button:has-text(\"다운로드\")"

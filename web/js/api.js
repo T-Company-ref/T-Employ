@@ -66,7 +66,7 @@ export async function updateMyStaffProfile(sb, staffId, { nickname, displayName,
 export async function listPostings(sb, { q = "", platform = "", limit = 500 } = {}) {
   let query = sb
     .from("job_postings")
-    .select("id, platform, title, external_posting_id, source_url, meta, opened_at, closed_at, created_at, updated_at")
+    .select("id, platform, title, external_posting_id, source_url, meta, category, opened_at, closed_at, created_at, updated_at")
     .order("updated_at", { ascending: false })
     .limit(limit);
 
@@ -271,7 +271,7 @@ export async function listTalents(sb, { q = "", platform = "", limit = 500 } = {
     .select(
       `
       id, platform, profile_url, profile_ref, headline, summary_text, profile_meta,
-      search_condition, proposal_status, is_active, sourced_at, created_at,
+      search_condition, proposal_status, is_active, sourced_at, created_at, category,
       candidate:candidates ( id, name, email, phone, is_active )
     `,
     )
@@ -554,7 +554,7 @@ export async function listDocuments(sb, { candidateId, applicationId, talentPool
   };
 
   const select =
-    "id, doc_type, file_url, file_hash, collected_at, application_id, talent_pool_id, candidate_id";
+    "id, doc_type, file_url, file_hash, collected_at, application_id, talent_pool_id, candidate_id, source_name, source_label";
 
   if (applicationId) {
     const { data, error } = await sb

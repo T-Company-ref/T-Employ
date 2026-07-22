@@ -2,11 +2,12 @@ import { env } from '../../config/env.js';
 import { loadRouteMap, resolveSelector } from '../routeMap.js';
 import { openSession } from '../browser.js';
 import { getConnector } from '../connectors/index.js';
-import { fetchApplicantResumeViaPopup } from './jobkoreaResume.js';
-import { storeResumePdf } from '../../db/storage.js';
-import { replaceApplicationResumeDocument } from '../../db/repositories/documents.js';
 import { needsPdfRefetch, probeStoredPdf } from '../../db/probeStoredPdf.js';
 import { query } from '../../db/client.js';
+import {
+  collectFromApplicantDetail,
+  openApplicantDetailFromRow,
+} from './applicantDetailDocs.js';
 
 export type ApplicantPdfTarget = {
   id: string;
@@ -14,6 +15,9 @@ export type ApplicantPdfTarget = {
   external_ref: string;
   name: string | null;
   file_url: string | null;
+  attach_count: number;
+  need_resume: boolean;
+  need_attach: boolean;
 };
 
 export type FetchApplicantPdfsResult = {
@@ -21,19 +25,32 @@ export type FetchApplicantPdfsResult = {
   saved: number;
   failed: number;
   remaining: number;
+  attachmentsSaved?: number;
 };
 
 async function listTargets(options: {
   onlyRef?: string;
   repairInvalid?: boolean;
   limit?: number;
+  includeAttachments?: boolean;
 }): Promise<ApplicantPdfTarget[]> {
-  const res = await query<ApplicantPdfTarget>(
+  const wantAttach = options.includeAttachments !== false;
+  const res = await query<{
+    id: string;
+    candidate_id: string;
+    external_ref: string;
+    name: string | null;
+    file_url: string | null;
+    attach_count: number;
+    attachments_checked_at: string | null;
+  }>(
     `SELECT a.id,
             a.candidate_id,
             a.external_ref,
             c.name,
-            d.file_url
+            d.file_url,
+            coalesce(att.cnt, 0)::int AS attach_count,
+            a.profile_meta->>'attachmentsCheckedAt' AS attachments_checked_at
      FROM applications a
      LEFT JOIN candidates c ON c.id = a.candidate_id
      LEFT JOIN LATERAL (
@@ -43,56 +60,56 @@ async function listTargets(options: {
        ORDER BY collected_at DESC NULLS LAST
        LIMIT 1
      ) d ON true
+     LEFT JOIN LATERAL (
+       SELECT count(*)::int AS cnt
+       FROM candidate_documents
+       WHERE application_id = a.id AND doc_type IN ('portfolio', 'other')
+     ) att ON true
      WHERE a.platform = 'jobkorea'
        AND a.is_active = true
        AND ($1::text IS NULL OR a.external_ref = $1)
-       AND (
-         ($2::boolean = false AND (d.file_url IS NULL OR d.file_url NOT LIKE 'http%'))
-         OR $2::boolean = true
-       )
      ORDER BY a.applied_at DESC NULLS LAST`,
-    [options.onlyRef ?? null, Boolean(options.repairInvalid)],
+    [options.onlyRef ?? null],
   );
 
   const out: ApplicantPdfTarget[] = [];
   for (const row of res.rows) {
-    if (!row.file_url?.startsWith('http')) {
-      out.push(row);
-    } else if (options.repairInvalid) {
+    let needResume = !row.file_url?.startsWith('http');
+    if (!needResume && options.repairInvalid && row.file_url) {
       const probe = await probeStoredPdf(row.file_url);
-      if (needsPdfRefetch(probe)) out.push(row);
+      needResume = needsPdfRefetch(probe);
     }
+    const needAttach =
+      wantAttach && row.attach_count === 0 && !row.attachments_checked_at;
+    if (!needResume && !needAttach) continue;
+    out.push({
+      id: row.id,
+      candidate_id: row.candidate_id,
+      external_ref: row.external_ref,
+      name: row.name,
+      file_url: row.file_url,
+      attach_count: row.attach_count,
+      need_resume: needResume,
+      need_attach: needAttach,
+    });
     if (options.limit != null && options.limit > 0 && out.length >= options.limit) break;
   }
   return out;
 }
 
-async function savePdf(row: ApplicantPdfTarget, pdf: Buffer): Promise<string> {
-  const stored = await storeResumePdf({
-    platform: 'jobkorea',
-    ref: `applicant-${row.external_ref}`,
-    pdf,
-  });
-  await replaceApplicationResumeDocument({
-    candidateId: row.candidate_id,
-    applicationId: row.id,
-    file: stored,
-  });
-  return stored.fileUrl;
-}
-
-/** Playwright 팝업 인쇄로 누락/깨진 지원자 PDF 수집 */
+/** 지원자 상세에서 이력서(인쇄) + 첨부/포트폴리오 수집 */
 export async function runFetchApplicantPdfs(options: {
   onlyRef?: string;
   repairInvalid?: boolean;
   limit?: number;
+  includeAttachments?: boolean;
 }): Promise<FetchApplicantPdfsResult> {
   const targets = await listTargets(options);
   console.log(
-    `[fetch-pdf] 대상 ${targets.length}명 (repair=${Boolean(options.repairInvalid)} limit=${options.limit ?? '∞'})`,
+    `[fetch-pdf] 대상 ${targets.length}명 (repair=${Boolean(options.repairInvalid)} attach=${options.includeAttachments !== false} limit=${options.limit ?? '∞'})`,
   );
   if (targets.length === 0) {
-    return { targets: 0, saved: 0, failed: 0, remaining: 0 };
+    return { targets: 0, saved: 0, failed: 0, remaining: 0, attachmentsSaved: 0 };
   }
 
   const byRef = new Map(targets.map((m) => [m.external_ref, m]));
@@ -115,6 +132,7 @@ export async function runFetchApplicantPdfs(options: {
 
     let saved = 0;
     let failed = 0;
+    let attachmentsSaved = 0;
     const giNos: string[] = [];
 
     for (const pubType of ['1', '2']) {
@@ -163,21 +181,48 @@ export async function runFetchApplicantPdfs(options: {
         if (!ref || !remaining.has(ref)) continue;
 
         const meta = byRef.get(ref)!;
-        console.log(`[popup] ${meta.name} ${ref}`);
-        let pdf = await fetchApplicantResumeViaPopup(session.page, routeMap, row);
-        if (!pdf) {
-          await session.page.waitForTimeout(800);
-          pdf = await fetchApplicantResumeViaPopup(session.page, routeMap, row);
-        }
-        if (!pdf) {
-          console.log('  failed');
+        console.log(`[detail] ${meta.name} ${ref} resume=${meta.need_resume} attach=${meta.need_attach}`);
+        try {
+          const opened = await openApplicantDetailFromRow(session.page, row);
+          try {
+            const result = await collectFromApplicantDetail({
+              detail: opened.detail,
+              routeMap,
+              candidateId: meta.candidate_id,
+              applicationId: meta.id,
+              externalRef: ref,
+              needResume: meta.need_resume,
+            });
+            attachmentsSaved += result.attachmentsSaved;
+            await query(
+              `UPDATE applications
+               SET profile_meta = coalesce(profile_meta, '{}'::jsonb)
+                 || jsonb_build_object('attachmentsCheckedAt', $2::text)
+               WHERE id = $1`,
+              [meta.id, new Date().toISOString()],
+            );
+
+            const resumeOk = !meta.need_resume || result.resumeSaved;
+            if (!resumeOk) {
+              failed += 1;
+            } else {
+              saved += 1;
+              remaining.delete(ref);
+            }
+          } finally {
+            await opened.close();
+            // 팝업이 아니면 목록 재진입
+            if (!session.page.url().includes('Applicant/list')) {
+              await session.page.goto(
+                `https://www.jobkorea.co.kr/Corp/Applicant/list?GI_No=${giNo}&PageCode=YA`,
+                { waitUntil: 'domcontentloaded' },
+              );
+            }
+          }
+        } catch (err) {
+          console.log('  failed', err instanceof Error ? err.message : err);
           failed += 1;
-          continue;
         }
-        const url = await savePdf(meta, pdf);
-        remaining.delete(ref);
-        saved += 1;
-        console.log(`  saved ${pdf.length}B → ${url}`);
       }
     }
 
@@ -188,7 +233,13 @@ export async function runFetchApplicantPdfs(options: {
       );
     }
 
-    return { targets: targets.length, saved, failed, remaining: remaining.size };
+    return {
+      targets: targets.length,
+      saved,
+      failed,
+      remaining: remaining.size,
+      attachmentsSaved,
+    };
   } finally {
     await session.close().catch(() => undefined);
   }

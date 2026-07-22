@@ -17,6 +17,8 @@ export type ApplicantAlertRow = NewApplicantBrief & {
   applicantListUrl?: string | null;
   giNo?: string | null;
   platformLabel?: string;
+  /** 포트폴리오·기타 첨부 */
+  attachments?: Array<{ name: string; url: string; label?: string | null }>;
 };
 
 function applicantListUrlFor(platform: string, giNo: string | null | undefined): string | null {
@@ -39,6 +41,7 @@ function mapRows(
     pdf_url: string | null;
     external_posting_id?: string | null;
   }>,
+  attachmentMap: Map<string, Array<{ name: string; url: string; label?: string | null }>> = new Map(),
 ): ApplicantAlertRow[] {
   return rows.map((r) => {
     const meta = r.profile_meta ?? {};
@@ -65,8 +68,59 @@ function mapRows(
       giNo,
       applicantListUrl: applicantListUrlFor(r.platform, giNo),
       platformLabel: r.platform === 'jobkorea' ? '잡코리아' : r.platform === 'saramin' ? '사람인' : r.platform,
+      attachments: attachmentMap.get(r.id) ?? [],
     };
   });
+}
+
+async function loadAttachmentMap(
+  applicationIds: string[],
+): Promise<Map<string, Array<{ name: string; url: string; label?: string | null }>>> {
+  const map = new Map<string, Array<{ name: string; url: string; label?: string | null }>>();
+  const unique = [...new Set(applicationIds.filter(Boolean))];
+  if (!unique.length) return map;
+  const res = await query<{
+    application_id: string;
+    source_name: string | null;
+    source_label: string | null;
+    file_url: string | null;
+    doc_type: string;
+  }>(
+    `SELECT application_id, source_name, source_label, file_url, doc_type
+     FROM candidate_documents
+     WHERE application_id = ANY($1::uuid[])
+       AND doc_type IN ('portfolio', 'other')
+       AND file_url LIKE 'http%'
+     ORDER BY collected_at ASC`,
+    [unique],
+  );
+  for (const row of res.rows) {
+    const list = map.get(row.application_id) ?? [];
+    list.push({
+      name: row.source_name || (row.doc_type === 'portfolio' ? '포트폴리오.pdf' : '첨부파일'),
+      url: row.file_url!,
+      label: row.source_label,
+    });
+    map.set(row.application_id, list);
+  }
+  return map;
+}
+
+async function mapRowsWithAttachments(
+  rows: Array<{
+    id: string;
+    name: string | null;
+    posting_title: string | null;
+    platform: string;
+    applied_at: string | null;
+    external_ref: string;
+    profile_meta: ApplicantProfileMeta | null;
+    pdf_url: string | null;
+    external_posting_id?: string | null;
+  }>,
+): Promise<ApplicantAlertRow[]> {
+  const attachmentMap = await loadAttachmentMap(rows.map((r) => r.id));
+  return mapRows(rows, attachmentMap);
 }
 
 export async function markApplicationsAlerted(ids: string[]): Promise<void> {
@@ -121,7 +175,7 @@ export async function loadApplicantAlertDetails(
      ORDER BY a.applied_at DESC NULLS LAST, a.created_at DESC`,
     [unique],
   );
-  return mapRows(res.rows);
+  return mapRowsWithAttachments(res.rows);
 }
 
 /**
@@ -184,7 +238,7 @@ export async function listApplicantsInDigestWindow(params: {
       params.includeUnalertedWeekendApplied === true,
     ],
   );
-  return mapRows(res.rows);
+  return mapRowsWithAttachments(res.rows);
 }
 
 /**
@@ -233,5 +287,5 @@ export async function listApplicantsByAppliedRange(params: {
      ORDER BY a.applied_at DESC NULLS LAST, a.created_at DESC`,
     [params.start.toISOString(), params.end.toISOString(), params.includeAlerted === true],
   );
-  return mapRows(res.rows);
+  return mapRowsWithAttachments(res.rows);
 }

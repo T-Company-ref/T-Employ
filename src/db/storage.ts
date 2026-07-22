@@ -38,7 +38,12 @@ export async function storeResumePdf(params: {
       name: 'resumes',
       public: true,
       file_size_limit: 10_485_760,
-      allowed_mime_types: ['application/pdf'],
+      allowed_mime_types: [
+        'application/pdf',
+        'application/octet-stream',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      ],
     }),
   }).catch(() => undefined);
 

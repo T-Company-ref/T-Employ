@@ -23,6 +23,7 @@
     "pdf:applicants": "tsx src/jobs/fetchMissingApplicantPdfs.ts",
     "pdf:talents": "tsx src/tools/fetchTalentPdfs.ts",
     "pdf:all-missing": "tsx src/tools/fetchAllMissingPdfs.ts",
+    "ops:backfill-categories": "tsx src/tools/backfillCategories.ts",
     "ops:health": "tsx src/jobs/healthCheck.ts",
     "report:compose": "tsx src/jobs/composeDailyReport.ts",
     "mail:send": "tsx src/jobs/sendDailyMail.ts",

@@ -2,6 +2,7 @@ import { withTransaction } from '../client.js';
 import type { NormalizedApplicant } from '../types.js';
 import { storeResumePdf } from '../storage.js';
 import { upsertCandidateDocument } from './documents.js';
+import { classifyPostingTitle } from '../../domain/jobCategories.js';
 
 export interface NewApplicantBrief {
   applicationId: string;
@@ -72,9 +73,10 @@ export async function upsertApplicants(
         const title = rec.postingTitle?.trim() || '(제목 없음)';
         const metaJson = JSON.stringify(rec.postingMeta ?? {});
         const sourceUrl = rec.postingMeta?.viewUrl ?? null;
+        const category = classifyPostingTitle(title);
         const posting = await client.query<{ id: string }>(
-          `INSERT INTO job_postings (platform, external_posting_id, title, source_url, meta)
-           VALUES ($1, $2, $3, $4, $5::jsonb)
+          `INSERT INTO job_postings (platform, external_posting_id, title, source_url, meta, category)
+           VALUES ($1, $2, $3, $4, $5::jsonb, $6)
            ON CONFLICT (platform, external_posting_id)
            DO UPDATE SET
              title = CASE
@@ -84,9 +86,10 @@ export async function upsertApplicants(
                ELSE job_postings.title
              END,
              source_url = COALESCE(EXCLUDED.source_url, job_postings.source_url),
-             meta = EXCLUDED.meta
+             meta = EXCLUDED.meta,
+             category = COALESCE(EXCLUDED.category, job_postings.category)
            RETURNING id`,
-          [rec.platform, rec.postingExternalId, title, sourceUrl, metaJson],
+          [rec.platform, rec.postingExternalId, title, sourceUrl, metaJson, category],
         );
         postingId = posting.rows[0].id;
       }

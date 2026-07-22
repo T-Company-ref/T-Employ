@@ -16,6 +16,11 @@ import {
   MEETING_LABELS,
   INTERVIEW_RESULT_LABELS,
 } from "./labels.js";
+import {
+  JOB_CATEGORIES,
+  resolveTalentCategory,
+  categoryShort,
+} from "./categories.js";
 
 const appEl = document.getElementById("app");
 
@@ -27,6 +32,7 @@ let rows = [];
 let selected = null;
 let filterQ = "";
 let filterPlatform = "";
+let filterCategory = "all"; // talent side tabs
 let listPage = 1;
 const PAGE_SIZE = 10;
 let toastTimer = null;
@@ -77,15 +83,42 @@ function renderChips(items, cls = "skill-chip") {
     .join("")}</div>`;
 }
 
+function resumeDoc(docs) {
+  return (
+    docs?.find((d) => d.doc_type === "resume" && d.file_url && !d.file_url.startsWith("file://")) ||
+    docs?.find((d) => d.file_url && !d.file_url.startsWith("file://") && d.doc_type !== "portfolio" && d.doc_type !== "other")
+  );
+}
+
+function attachmentDocs(docs) {
+  return (docs || []).filter(
+    (d) =>
+      (d.doc_type === "portfolio" || d.doc_type === "other") &&
+      d.file_url &&
+      !d.file_url.startsWith("file://"),
+  );
+}
+
 function renderDocuments(docs) {
-  const pdf = docs?.find((d) => d.file_url && !d.file_url.startsWith("file://"));
-  if (!pdf) return "";
-  const date = new Date(pdf.collected_at).toLocaleDateString("ko-KR");
-  return `<p class="doc-meta muted">${esc(date)} 수집</p>`;
+  const resume = resumeDoc(docs);
+  const atts = attachmentDocs(docs);
+  if (!resume && !atts.length) return "";
+  const date = resume?.collected_at
+    ? `<p class="doc-meta muted">${esc(new Date(resume.collected_at).toLocaleDateString("ko-KR"))} 이력서 수집</p>`
+    : "";
+  const attList = atts.length
+    ? `<ul class="doc-attach-list">${atts
+        .map(
+          (d) =>
+            `<li><a href="${esc(d.file_url)}" target="_blank" rel="noopener">${esc(d.source_label ? `${d.source_label} · ` : "")}${esc(d.source_name || "첨부파일")}</a></li>`,
+        )
+        .join("")}</ul>`
+    : "";
+  return `${date}${attList}`;
 }
 
 function renderProfileLinkRow(profileUrl, docs, { label = "잡코리아 프로필", listMode = false } = {}) {
-  const pdf = docs?.find((d) => d.file_url && !d.file_url.startsWith("file://"));
+  const pdf = resumeDoc(docs);
   const profileLink = profileUrl
     ? `<a class="profile-origin-link" href="${esc(profileUrl)}" target="_blank" rel="noopener">${esc(label)} ${Icon.external({ size: 14, className: "inline-icon" })}</a>`
     : `<span class="muted">${listMode ? "공고 지원자 목록 링크 없음" : "프로필 링크 없음"}</span>`;
@@ -215,6 +248,8 @@ function shell(innerList, innerDetail, { fullWidth = false } = {}) {
     btn.addEventListener("click", async () => {
       tab = btn.getAttribute("data-tab");
       selected = null;
+      filterCategory = "all";
+      listPage = 1;
       await refresh();
     });
   });
@@ -422,12 +457,18 @@ function bindListChrome() {
 }
 
 function totalListPages() {
-  return Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  return Math.max(1, Math.ceil(visibleRows().length / PAGE_SIZE));
+}
+
+function visibleRows() {
+  if (tab !== "talent" || filterCategory === "all") return rows;
+  return rows.filter((r) => resolveTalentCategory(r) === filterCategory);
 }
 
 function pageRows() {
+  const list = visibleRows();
   const start = (listPage - 1) * PAGE_SIZE;
-  return rows.slice(start, start + PAGE_SIZE);
+  return list.slice(start, start + PAGE_SIZE);
 }
 
 function clampListPage() {
@@ -435,8 +476,8 @@ function clampListPage() {
 }
 
 function syncListPageForSelection() {
-  if (!selected?.id || !rows.length) return;
-  const idx = rows.findIndex((r) => r.id === selected.id);
+  if (!selected?.id || !visibleRows().length) return;
+  const idx = visibleRows().findIndex((r) => r.id === selected.id);
   if (idx >= 0) listPage = Math.floor(idx / PAGE_SIZE) + 1;
 }
 
@@ -451,11 +492,12 @@ function listCardsHtml() {
 }
 
 function renderPagination() {
-  if (rows.length <= PAGE_SIZE) return "";
+  const list = visibleRows();
+  if (list.length <= PAGE_SIZE) return "";
   clampListPage();
   const total = totalListPages();
   const from = (listPage - 1) * PAGE_SIZE + 1;
-  const to = Math.min(listPage * PAGE_SIZE, rows.length);
+  const to = Math.min(listPage * PAGE_SIZE, list.length);
   const pages = [];
   const windowStart = Math.max(1, listPage - 2);
   const windowEnd = Math.min(total, listPage + 2);
@@ -467,13 +509,34 @@ function renderPagination() {
   return `<nav class="list-pagination" aria-label="페이지">
     <button type="button" class="btn btn-ghost btn-sm page-nav" id="page-prev" ${listPage <= 1 ? "disabled" : ""}>이전</button>
     <div class="page-nums">${pages.join("")}</div>
-    <span class="page-info">${from}–${to} / ${rows.length}</span>
+    <span class="page-info">${from}–${to} / ${list.length}</span>
     <button type="button" class="btn btn-ghost btn-sm page-nav" id="page-next" ${listPage >= total ? "disabled" : ""}>다음</button>
   </nav>`;
 }
 
+function talentCategoryNav() {
+  if (tab !== "talent") return "";
+  const counts = Object.fromEntries(JOB_CATEGORIES.map((c) => [c.id, 0]));
+  counts.all = rows.length;
+  for (const r of rows) {
+    const id = resolveTalentCategory(r);
+    counts[id] = (counts[id] || 0) + 1;
+  }
+  return `<nav class="cat-side" aria-label="인재 카테고리">
+    ${JOB_CATEGORIES.map((c) => {
+      const n = counts[c.id] ?? 0;
+      return `<button type="button" class="cat-side-btn ${filterCategory === c.id ? "active" : ""}" data-cat="${c.id}">
+        <span class="cat-side-label">${esc(c.short)}</span>
+        <span class="cat-side-count">${n}</span>
+      </button>`;
+    }).join("")}
+  </nav>`;
+}
+
 function listContentHtml() {
-  return `${listToolbar(listTabTitle())}${listCardsHtml()}${renderPagination()}`;
+  const body = `${listToolbar(listTabTitle())}${listCardsHtml()}${renderPagination()}`;
+  if (tab !== "talent") return body;
+  return `<div class="talent-layout">${talentCategoryNav()}<div class="talent-main">${body}</div></div>`;
 }
 
 function paintListPane() {
@@ -483,9 +546,24 @@ function paintListPane() {
   bindListChrome();
   bindPagination();
   bindCardSelection();
+  bindTalentCategoryNav();
   if (selected?.id) {
     document.querySelector(`.candidate-card[data-id="${selected.id}"]`)?.classList.add("selected");
   }
+}
+
+function bindTalentCategoryNav() {
+  document.querySelectorAll("[data-cat]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const next = btn.getAttribute("data-cat") || "all";
+      if (next === filterCategory) return;
+      filterCategory = next;
+      listPage = 1;
+      selected = null;
+      paintListPane();
+      await renderDetail();
+    });
+  });
 }
 
 function bindPagination() {
@@ -782,6 +860,7 @@ function renderTalentCards() {
           </div>
           <div class="card-top-side">
             <span class="meta-pill stage">${esc(proposalLabel(r.proposal_status))}</span>
+            <span class="meta-pill cat">${esc(categoryShort(resolveTalentCategory(r)))}</span>
             ${meta.company ? `<span class="card-salary">${esc(meta.company)}</span>` : ""}
           </div>
         </div>
