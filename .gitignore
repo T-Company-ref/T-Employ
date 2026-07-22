@@ -1,28 +1,9 @@
-# dependencies
-node_modules/
-
-# build output
-dist/
-
-# env / secrets
+﻿# local secrets / generated config (Actions writes config.js on deploy)
+web/config.js
+web/config.local.js
 .env
 .env.local
 *.local
-# 로컬에서 채운 웹 설정(배포는 Actions가 생성). 예시만 커밋.
-web/config.js
-web/config.local.js
-
-# playwright session state (never commit credentials/cookies)
-.sessions/
-storageState*.json
-
-# crawl artifacts
-artifacts/
-screenshots/
-*.log
-
-# 임베디드 DB 런타임 산출물 (CI 지속성은 db-snapshot 브랜치로 관리)
-data/
 
 # OS
 .DS_Store
