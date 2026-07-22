@@ -25,7 +25,9 @@ export async function getMyStaff(sb) {
 
   const { data, error } = await sb
     .from("staff_profiles")
-    .select("id, nickname, display_name, email, role, is_active, auth_user_id, notify_pref")
+    .select(
+      "id, nickname, display_name, email, role, is_active, auth_user_id, notify_pref, notify_realtime, notify_digest",
+    )
     .eq("auth_user_id", user.id)
     .maybeSingle();
   if (error) throw error;
@@ -41,26 +43,65 @@ export async function getMyStaff(sb) {
     email: user.email,
     role: "viewer",
     notify_pref: "none",
+    notify_realtime: false,
+    notify_digest: false,
     is_active: true,
     auth_user_id: user.id,
     _unlinked: true,
   };
 }
 
+function legacyNotifyPref(realtime, digest) {
+  if (realtime) return "realtime";
+  if (digest) return "digest";
+  return "none";
+}
+
 /** 본인 프로필: 별명·표시명·알림 설정 (역할 변경 불가) */
-export async function updateMyStaffProfile(sb, staffId, { nickname, displayName, notifyPref }) {
+export async function updateMyStaffProfile(
+  sb,
+  staffId,
+  { nickname, displayName, notifyRealtime, notifyDigest },
+) {
   const patch = {};
   if (nickname != null) patch.nickname = String(nickname).trim();
   if (displayName != null) patch.display_name = String(displayName).trim();
-  if (notifyPref != null) patch.notify_pref = notifyPref;
+  if (notifyRealtime != null) patch.notify_realtime = Boolean(notifyRealtime);
+  if (notifyDigest != null) patch.notify_digest = Boolean(notifyDigest);
+  if (notifyRealtime != null && notifyDigest != null) {
+    patch.notify_pref = legacyNotifyPref(Boolean(notifyRealtime), Boolean(notifyDigest));
+  }
   const { data, error } = await sb
     .from("staff_profiles")
     .update(patch)
     .eq("id", staffId)
-    .select("id, nickname, display_name, email, role, is_active, auth_user_id, notify_pref")
+    .select(
+      "id, nickname, display_name, email, role, is_active, auth_user_id, notify_pref, notify_realtime, notify_digest",
+    )
     .single();
   if (error) throw error;
   return data;
+}
+
+export async function listMyPostingNotify(sb, staffId) {
+  const { data, error } = await sb
+    .from("staff_posting_notify")
+    .select("posting_id")
+    .eq("staff_id", staffId);
+  if (error) throw error;
+  return (data ?? []).map((r) => r.posting_id);
+}
+
+/** 관심 공고 전체 교체 (진행중 공고만 전달) */
+export async function setMyPostingNotify(sb, staffId, postingIds) {
+  const ids = [...new Set((postingIds || []).filter(Boolean))];
+  const { error: delErr } = await sb.from("staff_posting_notify").delete().eq("staff_id", staffId);
+  if (delErr) throw delErr;
+  if (!ids.length) return [];
+  const rows = ids.map((posting_id) => ({ staff_id: staffId, posting_id }));
+  const { data, error } = await sb.from("staff_posting_notify").insert(rows).select("posting_id");
+  if (error) throw error;
+  return (data ?? []).map((r) => r.posting_id);
 }
 
 export async function listPostings(sb, { q = "", platform = "", limit = 500 } = {}) {
@@ -230,20 +271,24 @@ export async function getDashboardStats(sb) {
   };
 }
 
-export async function listApplications(sb, { q = "", platform = "", limit = 500 } = {}) {
+export async function listApplications(
+  sb,
+  { q = "", platform = "", postingId = "", limit = 500 } = {},
+) {
   let query = sb
     .from("applications")
     .select(
       `
-      id, platform, applied_at, current_stage, is_active, external_ref, profile_meta,
+      id, platform, applied_at, created_at, current_stage, is_active, external_ref, profile_meta, posting_id,
       candidate:candidates!inner ( id, name, email, phone, is_active, source_type ),
-      posting:job_postings ( id, title, external_posting_id, source_url, meta )
+      posting:job_postings ( id, title, external_posting_id, source_url, meta, closed_at )
     `,
     )
-    .order("applied_at", { ascending: false })
+    .order("created_at", { ascending: false })
     .limit(limit);
 
   if (platform) query = query.eq("platform", platform);
+  if (postingId) query = query.eq("posting_id", postingId);
   const { data, error } = await query;
   if (error) throw error;
 
@@ -254,9 +299,10 @@ export async function listApplications(sb, { q = "", platform = "", limit = 500 
       row.candidate?.name,
       row.candidate?.email,
       row.candidate?.phone,
-      row.posting?.title,
       row.platform,
       row.current_stage,
+      row.profile_meta?.position,
+      row.profile_meta?.careerTotal,
     ]
       .filter(Boolean)
       .join(" ")

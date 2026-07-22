@@ -50,11 +50,16 @@ export const ROLE_LABELS = {
   staff: "직원",
 };
 
-/** staff_profiles.notify_pref */
+/** staff_profiles.notify_pref (레거시) */
 export const NOTIFY_PREF_LABELS = {
   none: "알림 안 받음",
   digest: "아침 다이제스트만 (07:30)",
   realtime: "실시간 알림",
+};
+
+export const POSTING_STATUS_SIDE = {
+  open: "진행 중",
+  closed: "마감",
 };
 
 export const MEETING_LABELS = {

@@ -301,7 +301,7 @@ a:hover { text-decoration: underline; }
 }
 .talent-layout {
   display: grid;
-  grid-template-columns: 108px minmax(0, 1fr);
+  grid-template-columns: 168px minmax(0, 1fr);
   gap: 16px;
   align-items: start;
 }
@@ -312,6 +312,100 @@ a:hover { text-decoration: underline; }
   flex-direction: column;
   gap: 6px;
   padding: 4px 0;
+}
+.cat-side-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  max-height: min(52vh, 420px);
+  overflow: auto;
+}
+.cat-side-heading {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 0.02em;
+  padding: 0 4px 2px;
+}
+.cat-side-btn.sub {
+  font-size: 12px;
+  padding: 7px 8px;
+}
+.cat-side-btn.sub .cat-side-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 108px;
+}
+.posting-apps-panel {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.posting-apps-panel h3 {
+  margin: 0 0 10px;
+  font-size: 15px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.dash-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 14px;
+}
+.dash-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.dash-link:hover {
+  border-color: #94a3b8;
+  background: #f8fafc;
+}
+.notify-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 4px 0 8px;
+}
+.notify-checks label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.interest-list {
+  max-height: 220px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: #f8fafc;
+}
+.interest-list label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
 }
 .cat-side-btn {
   display: flex;
@@ -415,6 +509,12 @@ a:hover { text-decoration: underline; }
     flex-wrap: wrap;
   }
   .cat-side-btn { width: auto; min-width: 72px; }
+  .cat-side-group {
+    width: 100%;
+    max-height: none;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
 }
 .detail-pane {
   padding: 0;
