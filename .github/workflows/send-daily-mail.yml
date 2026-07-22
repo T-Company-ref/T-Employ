@@ -1,6 +1,6 @@
 name: send-daily-mail
 
-# ?�약 메일 발송 ???�동 ?�행 (cron 비활?? 결과 메일 ??�� 발송)
+# Send daily summary mail (manual only; result mail always).
 on:
   workflow_dispatch:
 

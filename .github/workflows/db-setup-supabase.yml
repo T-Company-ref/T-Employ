@@ -1,11 +1,11 @@
 name: db-setup-supabase
 
-# Supabase ?¤í‚¤ë§?+ RLS/auth ?•ì±… ?ìš© (?˜ë™ ?¤í–‰, ê²°ê³¼ ë©”ì¼ ??‹œ ë°œì†¡)
+# Apply shared schema + Supabase RLS/auth (manual only).
 on:
   workflow_dispatch:
     inputs:
       seed:
-        description: "ì´ˆê¸° ?œë“œ(platform_configs/staff_profiles ?? ?ìš© ?¬ë?"
+        description: "Run seed (platform_configs / staff_profiles)"
         type: boolean
         required: false
         default: true
@@ -28,15 +28,15 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - name: Guard - DATABASE_URL ?„ìˆ˜
+      - name: Guard - DATABASE_URL required
         run: |
           if [[ "${DATABASE_URL:-}" != postgres* ]]; then
-            echo "::error::DATABASE_URL ??postgres:// ?‘ì† ë¬¸ì?´ì´ ?„ë‹™?ˆë‹¤. Supabase Session pooler URL ???±ë¡?˜ì„¸??"
+            echo "::error::DATABASE_URL must be a postgres:// connection string (Supabase Session pooler URL)."
             exit 1
           fi
-      - name: Migrate (ê³µí†µ ?¤í‚¤ë§?
+      - name: Migrate (shared schema)
         run: npm run db:migrate
-      - name: Seed (? íƒ)
+      - name: Seed (optional)
         if: ${{ inputs.seed }}
         run: npm run db:seed
       - name: Apply Supabase RLS/auth

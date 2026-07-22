@@ -1,6 +1,6 @@
 name: compose-daily-report
 
-# ?�일 ?�약 집계 ???�동 ?�행 (cron 비활?? 결과 메일 ??�� 발송)
+# Compose daily report snapshot (manual only; result mail always).
 on:
   workflow_dispatch:
 

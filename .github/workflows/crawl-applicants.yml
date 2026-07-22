@@ -1,12 +1,12 @@
 name: crawl-applicants
 
-# [?ˆê±°?? Playwright ?€ ?¬ë¡¤ ??ë¹„ìƒ ?˜ë™??
-# ?¼ìƒ ?´ì˜: poll-applicants.yml (ê²½ëŸ‰ HTTP). ?¤ì?ì¤??£ì? ë§?ê²?
+# Legacy manual Playwright applicant crawl.
+# Daytime ops use poll-applicants.yml (lightweight HTTP).
 on:
   workflow_dispatch:
     inputs:
       platform:
-        description: "?¹ì • ?Œë«?¼ë§Œ ?¤í–‰ (ë¹„ìš°ë©??„ì²´)"
+        description: "Platform only (empty = default connector set)"
         required: false
         default: ""
 
