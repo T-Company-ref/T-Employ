@@ -125,7 +125,8 @@ export function classifyAuthError(err: unknown): {
   if (
     name === 'SessionExpiredError' ||
     message.startsWith('SESSION_') ||
-    /login_page:|SESSION_EXPIRED|SESSION_MISSING|SESSION_EMPTY/i.test(message) ||
+    /login_page:|login_redirect:|redirect_loop:|redirect_count_exceeded:/i.test(message) ||
+    /SESSION_EXPIRED|SESSION_MISSING|SESSION_EMPTY/i.test(message) ||
     /HTTP_401|HTTP_403/i.test(message) ||
     /login_failed/i.test(message)
   ) {

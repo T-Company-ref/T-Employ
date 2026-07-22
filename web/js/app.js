@@ -102,37 +102,61 @@ function attachmentDocs(docs) {
 function renderDocuments(docs) {
   const resume = resumeDoc(docs);
   const atts = attachmentDocs(docs);
-  if (!resume && !atts.length) return "";
-  const date = resume?.collected_at
-    ? `<p class="doc-meta muted">${esc(new Date(resume.collected_at).toLocaleDateString("ko-KR"))} 이력서 수집</p>`
-    : "";
-  const attList = atts.length
-    ? `<ul class="doc-attach-list">${atts
-        .map(
-          (d) =>
-            `<li><a href="${esc(d.file_url)}" target="_blank" rel="noopener">${esc(d.source_label ? `${d.source_label} · ` : "")}${esc(d.source_name || "첨부파일")}</a></li>`,
-        )
-        .join("")}</ul>`
-    : "";
-  return `${date}${attList}`;
+  if (!resume && !atts.length) {
+    return `<p class="muted empty-inline">저장된 이력서·첨부파일이 없습니다.</p>`;
+  }
+
+  const resumeBlock = resume
+    ? `<div class="doc-block">
+        <div class="doc-block-label">이력서</div>
+        <a class="pdf-open-btn" href="${esc(resume.file_url)}" target="_blank" rel="noopener" title="이력서 PDF 열기">
+          ${Icon.file({ size: 18, className: "pdf-open-icon" })}
+          <span class="pdf-open-label">이력서 PDF 열기</span>
+          ${Icon.external({ size: 13, className: "pdf-open-ext" })}
+        </a>
+        ${
+          resume.collected_at
+            ? `<p class="doc-meta muted">${esc(new Date(resume.collected_at).toLocaleDateString("ko-KR"))} 수집</p>`
+            : ""
+        }
+      </div>`
+    : `<div class="doc-block">
+        <div class="doc-block-label">이력서</div>
+        <span class="pdf-open-btn is-disabled" title="PDF 없음">
+          ${Icon.file({ size: 18, className: "pdf-open-icon" })}
+          <span class="pdf-open-label">이력서 PDF 없음</span>
+        </span>
+      </div>`;
+
+  const attBlock = `<div class="doc-block">
+      <div class="doc-block-label">첨부파일${atts.length ? ` · ${atts.length}` : ""}</div>
+      ${
+        atts.length
+          ? `<ul class="doc-attach-list">${atts
+              .map((d) => {
+                const kind = d.source_label || (d.doc_type === "portfolio" ? "포트폴리오" : "첨부");
+                const name = d.source_name || "첨부파일";
+                return `<li>
+                  <a class="attach-open-btn" href="${esc(d.file_url)}" target="_blank" rel="noopener" title="${esc(name)} 열기">
+                    <span class="attach-kind">${esc(kind)}</span>
+                    <span class="attach-name">${esc(name)}</span>
+                    <span class="attach-action">열기 ${Icon.external({ size: 13, className: "inline-icon" })}</span>
+                  </a>
+                </li>`;
+              })
+              .join("")}</ul>`
+          : `<p class="muted empty-inline">첨부파일 없음</p>`
+      }
+    </div>`;
+
+  return `<div class="doc-panel">${resumeBlock}${attBlock}</div>`;
 }
 
 function renderProfileLinkRow(profileUrl, docs, { label = "잡코리아 프로필", listMode = false } = {}) {
-  const pdf = resumeDoc(docs);
   const profileLink = profileUrl
     ? `<a class="profile-origin-link" href="${esc(profileUrl)}" target="_blank" rel="noopener">${esc(label)} ${Icon.external({ size: 14, className: "inline-icon" })}</a>`
     : `<span class="muted">${listMode ? "공고 지원자 목록 링크 없음" : "프로필 링크 없음"}</span>`;
-  const pdfBtn = pdf
-    ? `<a class="pdf-open-btn" href="${esc(pdf.file_url)}" target="_blank" rel="noopener" title="이력서 PDF 열기">
-        ${Icon.file({ size: 18, className: "pdf-open-icon" })}
-        <span class="pdf-open-label">PDF 열기</span>
-        ${Icon.external({ size: 13, className: "pdf-open-ext" })}
-      </a>`
-    : `<span class="pdf-open-btn is-disabled" title="PDF 없음">
-        ${Icon.file({ size: 18, className: "pdf-open-icon" })}
-        <span class="pdf-open-label">PDF 없음</span>
-      </span>`;
-  return `<div class="profile-link-row">${profileLink}${pdfBtn}</div>`;
+  return `<div class="profile-link-row">${profileLink}</div>`;
 }
 
 function applicantListUrl(r) {
@@ -997,8 +1021,13 @@ async function renderApplicantDetail(pane) {
       { icon: Icon.phone({ size: 16 }) },
     ),
     detailSection(
+      "서류",
+      renderDocuments(docs),
+      { icon: Icon.file({ size: 16 }) },
+    ),
+    detailSection(
       "프로필",
-      `${renderProfileLinkRow(applicantListUrl(r), docs, { label: "잡코리아 지원자 목록", listMode: true })}${renderDocuments(docs)}`,
+      renderProfileLinkRow(applicantListUrl(r), docs, { label: "잡코리아 지원자 목록", listMode: true }),
       { icon: Icon.link({ size: 16 }) },
     ),
     detailSection(
@@ -1024,7 +1053,7 @@ async function renderApplicantDetail(pane) {
           <button type="button" class="btn btn-primary" id="btn-recommend">추천하기</button>
           <span class="muted detail-hint">별명 <b>${esc(staff?.nickname || "")}</b>으로 표시</span>
         </div>`
-      : `<p class="muted empty-inline">이력서 PDF는 프로필 우측 <b>PDF 열기</b> 버튼으로 확인할 수 있습니다.</p>`
+      : `<p class="muted empty-inline">이력서·첨부파일은 상단 <b>서류</b> 섹션에서 열 수 있습니다.</p>`
   }`;
 
   const tagsHtml = `
@@ -1139,7 +1168,7 @@ async function renderApplicantDetail(pane) {
 
   const body = [
     profileHtml,
-    detailSection("이력서", docsHtml, { icon: Icon.file({ size: 16 }) }),
+    detailSection("추천", docsHtml, { icon: Icon.star({ size: 16 }) }),
     detailSection("추천 태그", tagsHtml, { icon: Icon.star({ size: 16 }) }),
     pipelineHtml,
   ].join("");
@@ -1297,8 +1326,13 @@ async function renderTalentDetail(pane) {
     renderChips(meta.skills),
     renderChips(meta.badges, "badge-chip"),
     detailSection(
+      "서류",
+      renderDocuments(docs),
+      { icon: Icon.file({ size: 16 }) },
+    ),
+    detailSection(
       "프로필",
-      `${renderProfileLinkRow(r.profile_url, docs)}${renderDocuments(docs)}`,
+      renderProfileLinkRow(r.profile_url, docs),
       { icon: Icon.link({ size: 16 }) },
     ),
   ].join("");
@@ -1309,7 +1343,7 @@ async function renderTalentDetail(pane) {
           <button type="button" class="btn btn-primary" id="btn-recommend">추천하기</button>
           <span class="muted detail-hint">별명 <b>${esc(staff?.nickname || "")}</b></span>
         </div>`
-      : `<p class="muted empty-inline">이력서 PDF는 프로필 우측 <b>PDF 열기</b> 버튼으로 확인할 수 있습니다.</p>`
+      : `<p class="muted empty-inline">이력서·첨부파일은 상단 <b>서류</b> 섹션에서 열 수 있습니다.</p>`
   }`;
 
   const tagsHtml = `
@@ -1353,7 +1387,7 @@ async function renderTalentDetail(pane) {
 
   const body = [
     profileHtml,
-    detailSection("이력서", docsHtml, { icon: Icon.file({ size: 16 }) }),
+    detailSection("추천", docsHtml, { icon: Icon.star({ size: 16 }) }),
     detailSection("추천 태그", tagsHtml, { icon: Icon.star({ size: 16 }) }),
     blockHtml,
   ].join("");

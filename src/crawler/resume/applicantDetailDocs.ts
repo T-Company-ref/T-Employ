@@ -151,6 +151,7 @@ export async function saveApplicantAttachments(params: {
       platform: 'jobkorea',
       ref: `applicant-${params.externalRef}-att-${safeRefPart(link.fileName)}`,
       pdf: bytes,
+      fileName: link.fileName,
     });
     await upsertApplicationAttachment({
       candidateId: params.candidateId,

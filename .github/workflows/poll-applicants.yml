@@ -1,13 +1,15 @@
 name: poll-applicants
 
-# Lightweight applicant poll ? no Playwright/Chromium
-# KST weekdays 08:17-19:17 hourly (UTC cron)
+# Lightweight applicant poll — no Playwright/Chromium
+# KST weekdays 08:17~11:17, 13:17~19:17 (skip 12:17 — afternoon session-refresh gap)
 on:
   schedule:
     # 08:17 KST Mon-Fri = 23:17 UTC Sun-Thu
     - cron: "17 23 * * 0-4"
-    # 09:17-19:17 KST Mon-Fri = 00:17-10:17 UTC Mon-Fri
-    - cron: "17 0-10 * * 1-5"
+    # 09:17~11:17 KST = 00:17~02:17 UTC Mon-Fri
+    - cron: "17 0-2 * * 1-5"
+    # 13:17~19:17 KST = 04:17~10:17 UTC Mon-Fri (skip 12:17 / UTC 03)
+    - cron: "17 4-10 * * 1-5"
   workflow_dispatch:
     inputs:
       limit:

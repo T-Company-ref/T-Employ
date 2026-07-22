@@ -13,7 +13,9 @@
 07:07  crawl-talent
 07:27  pdf-applicants (누락분만)
 07:37  mail-morning-digest
-08:17~19:17  poll-applicants (매시)
+08:17~11:17  poll-applicants (매시)
+12:47        session-refresh (오후)
+13:17~19:17  poll-applicants (매시, 12:17 생략)
 13:17  session-refresh (오후 재발급)
 ```
 

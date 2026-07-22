@@ -19,8 +19,7 @@ import {
   type DigestKind,
   type DigestReportSlices,
 } from './notifySchedule.js';
-import { buildMorningDigestHtml, morningDigestSubject } from './morningDigestHtml.js';
-import { docsPackHtml } from './docsPackHtml.js';
+import { buildApplicantAlertHtml, buildMorningDigestHtml, morningDigestSubject } from './morningDigestHtml.js';
 
 /** Twemoji SVG (jsDelivr) — 메일 클라이언트용 <img> */
 const TWEMOJI = 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg';
@@ -68,15 +67,6 @@ export function fmtKstDateTime(date: Date): string {
   return `${p.month}월 ${p.day}일 ${pad(p.hour)}:${pad(p.minute)}`;
 }
 
-function rangeIntro(start: Date, end: Date, count: number): string {
-  return `<p style="margin:0 0 14px;font-size:14px;color:#374151;line-height:1.6">
-    ${tw(EMOJI.calendar, '기간', 18)}
-    <b>${esc(fmtKstDateTime(start))}</b>부터
-    <b>${esc(fmtKstDateTime(end))}</b>까지의 지원 이력입니다.
-    <span style="color:#6b7280">(${count}명)</span>
-  </p>`;
-}
-
 function metaLine(parts: Array<string | null | undefined>): string {
   const cleaned = parts.map((p) => (p || '').trim()).filter(Boolean);
   if (!cleaned.length) return '';
@@ -111,55 +101,6 @@ function profilePdfActions(
   </div>`;
 }
 
-function applicantCards(items: ApplicantAlertRow[]): string {
-  if (items.length === 0) {
-    return `<tr><td style="padding:12px 10px;color:#6b7280">해당 지원자 없음</td></tr>`;
-  }
-
-  return (
-    items
-      .slice(0, 40)
-      .map((item) => {
-        const careerBits = (item.careerHistory || []).slice(0, 2).join(' / ');
-
-        return `<tr>
-        <td style="padding:14px 12px;border-bottom:1px solid #e5e7eb;vertical-align:top">
-          <div style="font-size:15px">
-            ${tw(EMOJI.person, '', 18)}
-            <b>${esc(item.name || '(이름 없음)')}</b>
-            <span style="color:#9ca3af;font-size:12px;font-weight:400"> · ${esc(item.platformLabel || item.platform)}</span>
-          </div>
-          <div style="margin-top:8px;font-size:14px;color:#111827">
-            ${tw(EMOJI.briefcase, '공고', 15)}
-            ${esc(item.postingTitle || '공고 미연결')}
-          </div>
-          ${
-            item.position
-              ? `<div style="margin-top:5px;font-size:13px;color:#374151">${tw(EMOJI.memo, '분야', 14)} ${esc(item.position)}</div>`
-              : ''
-          }
-          ${metaLine([item.genderAge, item.careerTotal ? `경력 ${item.careerTotal}` : null, item.education, item.desiredSalary])}
-          ${careerBits ? `<div style="color:#6b7280;font-size:12px;margin-top:4px">${esc(careerBits)}</div>` : ''}
-          ${tagHtml(item.recommendTags)}
-        </td>
-        <td style="padding:14px 12px;border-bottom:1px solid #e5e7eb;vertical-align:top;text-align:left;min-width:160px">
-          <div style="font-size:13px;margin-bottom:8px">${tw(EMOJI.calendar, '', 14)} ${fmtDate(item.appliedAt)}</div>
-          ${docsPackHtml({ resumeUrl: item.pdfUrl, attachments: item.attachments })}
-          ${
-            item.applicantListUrl
-              ? `<div style="margin-top:8px"><a href="${esc(item.applicantListUrl)}" style="color:#1e3a8a;font-size:12px;font-weight:700;text-decoration:none">지원자 목록 →</a></div>`
-              : ''
-          }
-        </td>
-      </tr>`;
-      })
-      .join('') +
-    (items.length > 40
-      ? `<tr><td colspan="2" style="padding:8px 10px;color:#6b7280">… 외 ${items.length - 40}명</td></tr>`
-      : '')
-  );
-}
-
 async function resolveMailItems(
   items: Array<{ applicationId: string } & Partial<ApplicantAlertRow>>,
 ): Promise<ApplicantAlertRow[]> {
@@ -191,11 +132,12 @@ function realtimeSubject(count: number, now = new Date()): string {
 
 async function sendApplicantListMail(params: {
   subject: string;
-  titleHtml: string;
-  introHtml: string;
+  title: string;
+  subtitle: string;
   items: Array<{ applicationId: string } & Partial<ApplicantAlertRow>>;
   markIds?: string[];
   channel?: 'realtime' | 'digest';
+  showNew?: boolean;
 }): Promise<void> {
   const to = await resolveMailRecipients(params.channel ?? 'realtime');
   if (to.length === 0) {
@@ -203,20 +145,13 @@ async function sendApplicantListMail(params: {
     return;
   }
   const enriched = await resolveMailItems(params.items);
-  const html = `<!DOCTYPE html><html lang="ko"><body style="margin:0;padding:16px;background:#f8fafc;font-family:Segoe UI,Apple SD Gothic Neo,Malgun Gothic,Arial,sans-serif;color:#1f2937;line-height:1.5">
-  <div style="max-width:720px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;padding:20px 18px">
-    <h2 style="margin:0 0 12px;font-size:18px;color:#0f172a">${params.titleHtml}</h2>
-    ${params.introHtml}
-    <table cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%">
-      <thead><tr style="text-align:left;color:#64748b;font-size:12px;background:#f1f5f9">
-        <th style="padding:8px 12px;border-bottom:1px solid #e2e8f0">${tw(EMOJI.people, '', 14)} 지원자 · 공고</th>
-        <th style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:right">${tw(EMOJI.calendar, '', 14)} 지원일 · PDF</th>
-      </tr></thead>
-      <tbody>${applicantCards(enriched)}</tbody>
-    </table>
-    <p style="margin:16px 0 0;font-size:11px;color:#94a3b8">TBELL Employ</p>
-  </div>
-  </body></html>`;
+  const html = buildApplicantAlertHtml({
+    title: params.title,
+    subtitle: params.subtitle,
+    items: enriched,
+    sendDate: toKstParts(),
+    showNew: params.showNew,
+  });
 
   await sendHtmlMail({ to, subject: params.subject, html, allowDryRun: true });
   if (params.markIds?.length) {
@@ -263,6 +198,9 @@ export async function sendApplicantCrawlResultMail(results: RunResult[]): Promis
 
   const { realtime, deferred } = splitRealtimeAndDeferred(newItems, now);
   const kst = toKstParts(now);
+  console.log(
+    `[mail/crawl] 신규 ${newItems.length}명 → 실시간 ${realtime.length} · 보류 ${deferred.length} (주말 지원일은 모닝 다이제스트로)`,
+  );
 
   const weekendCatchUp = deferred.filter(
     (i) => i.appliedAt && isWeekendKst(toKstParts(new Date(i.appliedAt))),
@@ -273,11 +211,12 @@ export async function sendApplicantCrawlResultMail(results: RunResult[]): Promis
     const start = win?.start ?? now;
     await sendApplicantListMail({
       subject: digestSubject('weekend', weekendCatchUp.length, start, now),
-      titleHtml: `${tw(EMOJI.bell, '', 20)} 주말 지원 ${weekendCatchUp.length}명`,
-      introHtml: rangeIntro(start, now, weekendCatchUp.length),
+      title: `주말 지원 ${weekendCatchUp.length}명`,
+      subtitle: `${fmtKstDateTime(start)} ~ ${fmtKstDateTime(now)} · 주말 지원분 모아서 발송`,
       items: weekendCatchUp,
       markIds: weekendCatchUp.map((i) => i.applicationId),
       channel: 'digest',
+      showNew: true,
     });
   }
 
@@ -287,11 +226,12 @@ export async function sendApplicantCrawlResultMail(results: RunResult[]): Promis
   if (realtimeOnly.length > 0 && isRealtimeNotifyWindow(now)) {
     await sendApplicantListMail({
       subject: realtimeSubject(realtimeOnly.length, now),
-      titleHtml: `${tw(EMOJI.bell, '', 20)} 신규 지원 ${realtimeOnly.length}명`,
-      introHtml: `<p style="margin:0 0 14px;font-size:14px;color:#374151">${tw(EMOJI.calendar, '', 18)} <b>${esc(fmtKstDateTime(now))}</b> 기준 신규 지원 이력입니다. <span style="color:#6b7280">(${realtimeOnly.length}명)</span></p>`,
+      title: `신규 지원 ${realtimeOnly.length}명`,
+      subtitle: `${fmtKstDateTime(now)} 기준 실시간 알림 · DB 신규 ${newItems.length}명 중 평일 지원 ${realtimeOnly.length}명`,
       items: realtimeOnly,
       markIds: realtimeOnly.map((i) => i.applicationId),
       channel: 'realtime',
+      showNew: true,
     });
   } else if (deferred.length > weekendCatchUp.length) {
     console.log(
@@ -355,17 +295,17 @@ export async function sendDigestApplicantMail(
     return;
   }
 
-  const title =
-    options.kind === 'weekend'
-      ? `${tw(EMOJI.bell, '', 20)} 주말 지원 ${items.length}명`
-      : `${tw(EMOJI.bell, '', 20)} 모닝 지원 ${items.length}명`;
-
   await sendApplicantListMail({
     subject: digestSubject(options.kind, items.length, options.start, options.end),
-    titleHtml: title,
-    introHtml: rangeIntro(options.start, options.end, items.length),
+    title:
+      options.kind === 'weekend'
+        ? `주말 지원 ${items.length}명`
+        : `모닝 지원 ${items.length}명`,
+    subtitle: `${fmtKstDateTime(options.start)} ~ ${fmtKstDateTime(options.end)}`,
     items,
     markIds: items.map((i) => i.applicationId),
+    channel: 'digest',
+    showNew: options.kind === 'weekend',
   });
 }
 

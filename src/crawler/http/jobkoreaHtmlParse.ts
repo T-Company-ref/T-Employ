@@ -60,7 +60,8 @@ export function parsePostingListHtml(html: string): PostingNavItem[] {
       viewHref?.match(/GI_Read\/(\d+)/i)?.[1] ||
       postingNumber;
 
-    const applicantListUrl = absUrl(href) ?? `${BASE}/Corp/Applicant/list?GI_No=${giNo}&PageCode=YA`;
+    // 제목 링크는 만료/관리 URL 일 수 있음 — 지원자 목록은 항상 고정 경로 사용
+    const applicantListUrl = `${BASE}/Corp/Applicant/list?GI_No=${giNo}&PageCode=YA`;
 
     const counts: Record<string, number> = {};
     item.find('.apyStatusBoard .boardItem').each((__, bi) => {
@@ -174,10 +175,25 @@ export function parseApplicantPaging(html: string): {
   nextPage: number;
 } {
   const $ = cheerio.load(html);
-  const currentText = one($, '#dev_viewpageing .now, #dev_viewpageing .current') || '1';
+  const root = $('#dev_viewpageing, .tplPagination.newVer, .tplPagination').first();
+  const currentText =
+    one($, '.now, .current', root) ||
+    one($, '#dev_viewpageing .now, #dev_viewpageing .current') ||
+    '1';
   const current = Number(currentText.trim()) || 1;
-  const next = $(`#dev_viewpageing a[data-page-no="${current + 1}"]`);
-  return { current, hasNext: next.length > 0, nextPage: current + 1 };
+  const next =
+    root.find(`a[data-page-no="${current + 1}"]`).length > 0
+      ? root.find(`a[data-page-no="${current + 1}"]`)
+      : $(`a[data-page-no="${current + 1}"]`);
+  const hasNextByLink = next.length > 0;
+  // 셀렉터 실패 대비: 한 페이지가 가득 차면 다음 페이지를 한 번 더 시도
+  const rowCount = $('tr[data-pssno]').length;
+  const hasNextByFullPage = rowCount >= 15;
+  return {
+    current,
+    hasNext: hasNextByLink || hasNextByFullPage,
+    nextPage: current + 1,
+  };
 }
 
 export function countApplicantRows(html: string): number {

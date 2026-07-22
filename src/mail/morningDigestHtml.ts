@@ -4,6 +4,7 @@
 import type { ApplicantAlertRow } from '../db/repositories/applicantAlerts.js';
 import type { TalentAlertRow } from '../db/repositories/talentAlerts.js';
 import { docsPackHtml } from './docsPackHtml.js';
+import { type DigestReportSlices, type KstParts, toKstParts } from './notifySchedule.js';
 
 const TWEMOJI = 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg';
 const WEEKDAY_KO = ['일', '월', '화', '수', '목', '금', '토'];
@@ -177,6 +178,55 @@ function kpi(label: string, value: string, sub: string, color: string, soft: str
 
 const APP_HEAD = `${th('채용공고')}${th('이름')}${th('지원시각')}${th('경력')}${th('서류')}${th('이동', 'center')}`;
 const TALENT_HEAD = `${th('이름')}${th('직무')}${th('경력')}${th('핵심 역량')}${th('프로필 · PDF', 'center')}`;
+
+/** 실시간/단일 구간 지원자 알림 — 모닝 다이제스트와 동일 레이아웃 */
+export function buildApplicantAlertHtml(params: {
+  title: string;
+  subtitle: string;
+  items: ApplicantAlertRow[];
+  sendDate?: KstParts;
+  showNew?: boolean;
+}): string {
+  const sendDate = params.sendDate ?? toKstParts();
+  return `<!DOCTYPE html><html lang="ko"><body style="margin:0;padding:0;background:#e8eef6;font-family:'Segoe UI',Apple SD Gothic Neo,Malgun Gothic,Arial,sans-serif;color:#0f172a;line-height:1.5">
+  <div style="max-width:880px;margin:0 auto;padding:24px 14px 32px">
+    <div style="background:linear-gradient(135deg,#0b1f3a 0%,#1e3a8a 55%,#2563eb 100%);border-radius:18px 18px 0 0;padding:26px 24px 22px;color:#fff">
+      <table width="100%" cellpadding="0" cellspacing="0"><tr>
+        <td>
+          <div style="font-size:12px;opacity:0.75;font-weight:600;letter-spacing:0.04em">TBELL EMPLOY</div>
+          <div style="margin-top:8px;font-size:22px;font-weight:800;letter-spacing:-0.02em">${tw('1f514', '', 22)} ${esc(params.title)}</div>
+          <div style="margin-top:8px;font-size:13px;opacity:0.88">${esc(params.subtitle)}</div>
+        </td>
+        <td align="right" style="vertical-align:top">
+          <div style="display:inline-block;padding:8px 12px;border-radius:10px;background:rgba(255,255,255,0.12);font-size:13px;font-weight:700;white-space:nowrap">${esc(fmtHeaderDate(sendDate))}</div>
+        </td>
+      </tr></table>
+    </div>
+
+    <div style="background:#eef3f9;border:1px solid #dbe3ef;border-top:0;border-radius:0 0 18px 18px;padding:16px 14px 20px">
+      ${sectionCard({
+        accent: '#2563eb',
+        soft: '#eff6ff',
+        step: '1',
+        title: params.title,
+        rangeLabel: params.subtitle,
+        count: params.items.length,
+        thead: APP_HEAD,
+        tbody: applicantRows(params.items, params.showNew !== false),
+      })}
+
+      <div style="margin-top:6px;padding:14px 16px;border-radius:12px;background:#ffffff;border:1px solid #bfdbfe">
+        <div style="font-size:12px;font-weight:800;color:#1d4ed8;margin-bottom:4px">TIP</div>
+        <div style="font-size:12px;color:#334155;line-height:1.6">
+          지원자 <b>지원자 목록</b>은 잡코리아 해당 공고의 지원자 리스트로 이동합니다.
+          지원자 <b>서류</b>란은 이력서 PDF와 첨부(포트폴리오 등) 파일명을 링크로 모아 둡니다.
+        </div>
+      </div>
+      <p style="margin:16px 0 0;font-size:11px;color:#94a3b8;text-align:center">TBELL Employ 자동 발송 · 알림 설정은 웹 프로필에서 변경할 수 있습니다.</p>
+    </div>
+  </div>
+  </body></html>`;
+}
 
 export function buildMorningDigestHtml(params: {
   slices: DigestReportSlices;

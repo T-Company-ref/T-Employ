@@ -553,38 +553,31 @@ export async function listDocuments(sb, { candidateId, applicationId, talentPool
     }
   };
 
-  const select =
+  const selectFull =
     "id, doc_type, file_url, file_hash, collected_at, application_id, talent_pool_id, candidate_id, source_name, source_label";
+  const selectBasic =
+    "id, doc_type, file_url, file_hash, collected_at, application_id, talent_pool_id, candidate_id";
 
-  if (applicationId) {
-    const { data, error } = await sb
+  async function selectEq(column, value) {
+    let res = await sb
       .from("candidate_documents")
-      .select(select)
-      .eq("application_id", applicationId)
+      .select(selectFull)
+      .eq(column, value)
       .order("collected_at", { ascending: false });
-    if (error) throw error;
-    pushAll(data);
+    if (res.error && /source_name|source_label|column/i.test(res.error.message || "")) {
+      res = await sb
+        .from("candidate_documents")
+        .select(selectBasic)
+        .eq(column, value)
+        .order("collected_at", { ascending: false });
+    }
+    if (res.error) throw res.error;
+    pushAll(res.data);
   }
 
-  if (talentPoolId) {
-    const { data, error } = await sb
-      .from("candidate_documents")
-      .select(select)
-      .eq("talent_pool_id", talentPoolId)
-      .order("collected_at", { ascending: false });
-    if (error) throw error;
-    pushAll(data);
-  }
-
-  if (candidateId) {
-    const { data, error } = await sb
-      .from("candidate_documents")
-      .select(select)
-      .eq("candidate_id", candidateId)
-      .order("collected_at", { ascending: false });
-    if (error) throw error;
-    pushAll(data);
-  }
+  if (applicationId) await selectEq("application_id", applicationId);
+  if (talentPoolId) await selectEq("talent_pool_id", talentPoolId);
+  if (candidateId) await selectEq("candidate_id", candidateId);
 
   rows.sort((a, b) => new Date(b.collected_at) - new Date(a.collected_at));
   return rows;
