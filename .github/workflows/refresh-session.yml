@@ -1,12 +1,11 @@
 name: refresh-session
 
-# [?ˆê±°?? ??? ê·œ??session-refresh.yml (??1???¤ì?ì¤?+ ?˜ë™).
-# ???Œì¼?€ ?¸í™˜???˜ë™ ?¤í–‰ë§?? ì?.
+# Legacy manual-only alias. Scheduled refresh uses session-refresh.yml.
 on:
   workflow_dispatch:
     inputs:
       platform:
-        description: "?¸ì…˜ ?¬ë°œê¸??€???Œë«??
+        description: "Platform to refresh"
         required: true
         default: "jobkorea"
 
