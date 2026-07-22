@@ -1,6 +1,9 @@
 import { env } from '../../config/env.js';
 import type { NormalizedApplicant } from '../../db/types.js';
 import type { PostingNavItem } from '../extract/jobkorea.js';
+import { collectApplicantsFromPostings } from '../extract/jobkorea.js';
+import { openSession } from '../browser.js';
+import { loadRouteMap } from '../routeMap.js';
 import { fetchJobkoreaHtml, type FetchHtmlResult } from './jobkoreaFetch.js';
 import {
   openPlaywrightFetchSession,
@@ -23,6 +26,36 @@ export type PollApplicantsResult = {
   applicants: NormalizedApplicant[];
   sessionPath: string;
 };
+
+/** Actions 는 request HTML 로 지원자 행이 비는 경우가 많아 Chromium 사용 */
+export function shouldUseBrowserPoll(): boolean {
+  if (process.env.POLL_USE_BROWSER === 'true') return true;
+  if (process.env.POLL_USE_BROWSER === 'false') return false;
+  return Boolean(process.env.GITHUB_ACTIONS);
+}
+
+async function pollWithBrowser(limit: number): Promise<PollApplicantsResult> {
+  const { path, cookieCount } = loadSessionCookieHeader('jobkorea');
+  console.log(`[poll] session ${path} cookies=${cookieCount} mode=playwright-browser`);
+  const routeMap = loadRouteMap('jobkorea');
+  const session = await openSession('jobkorea');
+  try {
+    await session.page.goto(`${BASE}/Corp/GIMng/List?PubType=1`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 20_000,
+    });
+    const applicants = await collectApplicantsFromPostings(session.page, routeMap, limit);
+    await session.saveSession();
+    if (applicants.length === 0) {
+      throw new Error(
+        'POLL_EMPTY_APPLICANTS: 브라우저 폴링에서도 지원자 0명 — 세션/권한 문제 가능',
+      );
+    }
+    return { postings: -1, applicants, sessionPath: path };
+  } finally {
+    await session.close().catch(() => undefined);
+  }
+}
 
 type HtmlGetter = (url: string, options?: { referer?: string }) => Promise<FetchHtmlResult>;
 
@@ -75,6 +108,10 @@ async function collectApplicantsForPosting(
     const { html } = await getHtml(url, {
       referer: `${BASE}/Corp/GIMng/List?PubType=1`,
     });
+    if (page === 1 && !html.includes('data-pssno')) {
+      const tip = html.includes('Login') ? 'login?' : `html=${html.length}B`;
+      console.warn(`[poll] empty applicant html GI_No=${posting.giNo} ${tip}`);
+    }
     const batch = parseApplicantListHtml(html, posting);
     let added = 0;
     for (const item of batch) {
@@ -95,18 +132,7 @@ async function collectApplicantsForPosting(
   return out;
 }
 
-/**
- * 경량 폴링 전략:
- * 1) 모든 공고 1페이지만 먼저 (신규 지원 누락 방지)
- * 2) 남은 quota 로 공고별 추가 페이지
- *
- * Actions 에서는 undici fetch 가 잡코리아에서 자주 실패하므로
- * Playwright request(브라우저 TLS) 경로를 쓴다.
- */
-export async function pollJobkoreaApplicants(options?: {
-  limit?: number;
-}): Promise<PollApplicantsResult> {
-  const limit = options?.limit ?? env.crawlMaxItems();
+async function pollWithHttp(limit: number): Promise<PollApplicantsResult> {
   const { path, cookieHeader, cookieCount } = loadSessionCookieHeader('jobkorea');
   const usePw = shouldUsePlaywrightFetch();
   console.log(
@@ -185,4 +211,19 @@ export async function pollJobkoreaApplicants(options?: {
   } finally {
     await pw?.close().catch(() => undefined);
   }
+}
+
+/**
+ * 지원자 폴링.
+ * - 로컬: HTTP(undici) 또는 Playwright request
+ * - Actions: Chromium 브라우저 (지원자 목록이 request HTML 에 안 실히는 문제 회피)
+ */
+export async function pollJobkoreaApplicants(options?: {
+  limit?: number;
+}): Promise<PollApplicantsResult> {
+  const limit = options?.limit ?? env.crawlMaxItems();
+  if (shouldUseBrowserPoll()) {
+    return pollWithBrowser(limit);
+  }
+  return pollWithHttp(limit);
 }

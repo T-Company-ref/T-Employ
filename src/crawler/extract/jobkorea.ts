@@ -59,7 +59,7 @@ export async function extractPostingList(page: Page): Promise<PostingNavItem[]> 
       viewHref?.match(/GI_Read\/(\d+)/i)?.[1] ||
       postingNumber;
 
-    const applicantListUrl = absUrl(href) ?? `${BASE}/Corp/Applicant/list?GI_No=${giNo}&PageCode=YA`;
+    const applicantListUrl = `${BASE}/Corp/Applicant/list?GI_No=${giNo}&PageCode=YA`;
 
     const counts: Record<string, number> = {};
     const countLinks = item.locator('.apyStatusBoard .boardItem a.itemNum');
@@ -326,39 +326,90 @@ export async function collectApplicantsFromPostings(
   const allPostings: PostingNavItem[] = [];
   const postingSeen = new Set<string>();
 
-  for (;;) {
-    for (const posting of await extractPostingList(page)) {
-      if (postingSeen.has(posting.giNo)) continue;
-      postingSeen.add(posting.giNo);
-      allPostings.push(posting);
+  for (const pubType of ['1', '2']) {
+    await page.goto(`${BASE}/Corp/GIMng/List?PubType=${pubType}`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 20_000,
+    });
+    const hasList = await page
+      .waitForSelector('.giListItem', { timeout: 12_000 })
+      .catch(() => null);
+    if (!hasList) continue;
+
+    for (;;) {
+      for (const posting of await extractPostingList(page)) {
+        if (postingSeen.has(posting.giNo)) continue;
+        postingSeen.add(posting.giNo);
+        allPostings.push(posting);
+      }
+      const hasNext = await clickNextPostingPage(page, routeMap);
+      if (!hasNext) break;
     }
-    const hasNext = await clickNextPostingPage(page, routeMap);
-    if (!hasNext) break;
   }
 
+  console.log(`[browser-poll] postings ${allPostings.length}`);
+
+  // Pass 1: 각 공고 1페이지 (신규 누락 방지)
   for (const posting of allPostings) {
     if (out.length >= limit) break;
-    const url = posting.meta.applicantListUrl ?? `${BASE}/Corp/Applicant/list?GI_No=${posting.giNo}&PageCode=YA`;
+    const url = `${BASE}/Corp/Applicant/list?GI_No=${posting.giNo}&PageCode=YA`;
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20_000 });
     const hasRows = await page
       .locator(rowSel)
       .first()
       .isVisible({ timeout: 8_000 })
       .catch(() => false);
-    if (!hasRows) continue;
+    if (!hasRows) {
+      console.log(`[browser-poll] p1 GI_No=${posting.giNo} +0`);
+      continue;
+    }
 
-    const batch = await collectPaginated(
-      () => extractApplicantPage(page, routeMap, posting),
-      () => clickNextApplicantPage(page, routeMap),
-      (r) => r.externalRef,
-      limit - out.length,
-    );
-
-    for (const item of batch) {
+    const pageItems = await extractApplicantPage(page, routeMap, posting);
+    let added = 0;
+    for (const item of pageItems) {
       if (seen.has(item.externalRef)) continue;
       seen.add(item.externalRef);
       out.push(item);
+      added += 1;
       if (out.length >= limit) break;
+    }
+    console.log(
+      `[browser-poll] p1 GI_No=${posting.giNo} +${added} total=${out.length} "${posting.title.slice(0, 40)}"`,
+    );
+  }
+
+  // Pass 2: 남은 quota 로 페이지네이션
+  if (out.length < limit) {
+    for (const posting of allPostings) {
+      if (out.length >= limit) break;
+      const url = `${BASE}/Corp/Applicant/list?GI_No=${posting.giNo}&PageCode=YA`;
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20_000 });
+      const hasRows = await page
+        .locator(rowSel)
+        .first()
+        .isVisible({ timeout: 5_000 })
+        .catch(() => false);
+      if (!hasRows) continue;
+
+      const before = out.length;
+      const batch = await collectPaginated(
+        () => extractApplicantPage(page, routeMap, posting),
+        () => clickNextApplicantPage(page, routeMap),
+        (r) => r.externalRef,
+        limit - out.length,
+      );
+      for (const item of batch) {
+        if (seen.has(item.externalRef)) continue;
+        seen.add(item.externalRef);
+        out.push(item);
+        if (out.length >= limit) break;
+      }
+      const gained = out.length - before;
+      if (gained > 0) {
+        console.log(
+          `[browser-poll] p2 GI_No=${posting.giNo} +${gained} total=${out.length}`,
+        );
+      }
     }
   }
 

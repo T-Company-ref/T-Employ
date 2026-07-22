@@ -1,6 +1,7 @@
 /**
- * 경량 지원자 폴링 (fetch + HTML, Chromium 없음).
- * 세션 만료 시 자동 갱신하지 않음 — 관리자 메일 1회 + session-refresh 수동.
+ * 지원자 폴링.
+ * - 로컬: HTTP(fetch) 기본
+ * - Actions: Chromium (지원자 목록이 request HTML에 비는 문제 회피)
  *
  * usage:
  *   npm run poll:applicants

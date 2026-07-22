@@ -1,7 +1,7 @@
 name: poll-applicants
 
-# Lightweight applicant poll — no Playwright/Chromium
-# KST weekdays 08:17~11:17, 13:17~19:17 (skip 12:17 — afternoon session-refresh gap)
+# Applicant poll — Actions uses Chromium (request HTML often returns 0 applicant rows)
+# KST weekdays 08:17~11:17, 13:17~19:17 (skip 12:17)
 on:
   schedule:
     # 08:17 KST Mon-Fri = 23:17 UTC Sun-Thu
@@ -31,7 +31,7 @@ permissions:
 jobs:
   poll:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       PGSSL: ${{ secrets.DATABASE_URL != '' && 'true' || 'false' }}
@@ -41,6 +41,7 @@ jobs:
       HEADLESS: "true"
       AUTO_CRAWL_ENABLED: "true"
       CRAWL_MAX_ITEMS: ${{ github.event.inputs.limit || '50' }}
+      POLL_USE_BROWSER: "true"
       GMAIL_USER: ${{ secrets.GMAIL_USER }}
       GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
       MAIL_FROM: ${{ secrets.MAIL_FROM }}
@@ -55,12 +56,15 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - run: npx playwright install --with-deps chromium
       - name: Load sessions (+ DB migrate)
         uses: ./.github/actions/db-load
-      - name: Poll applicants
-        env:
-          # Actions undici fetch 는 잡코리아에서 자주 실패 → Playwright request 사용
-          POLL_USE_PLAYWRIGHT: "true"
+      - name: Poll applicants (Chromium)
         run: |
           EXTRA=""
           if [[ "${{ github.event.inputs.dry_run }}" == "true" ]]; then EXTRA="--dry-run"; fi
