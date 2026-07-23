@@ -1,6 +1,6 @@
-import { configReady, createClient } from "./client.js?v=20260723d";
-import * as api from "./api.js?v=20260723d";
-import { Icon } from "./icons.js?v=20260723d";
+import { configReady, createClient } from "./client.js?v=20260723e";
+import * as api from "./api.js?v=20260723e";
+import { Icon } from "./icons.js?v=20260723e";
 import {
   stageLabel,
   proposalLabel,
@@ -14,12 +14,12 @@ import {
   POSTING_STATUS_SIDE,
   MEETING_LABELS,
   INTERVIEW_RESULT_LABELS,
-} from "./labels.js?v=20260723d";
+} from "./labels.js?v=20260723e";
 import {
   JOB_CATEGORIES,
   resolveTalentCategory,
   categoryShort,
-} from "./categories.js?v=20260723d";
+} from "./categories.js?v=20260723e";
 
 const appEl = document.getElementById("app");
 
@@ -32,15 +32,15 @@ let selected = null;
 let filterQ = "";
 let filterPlatform = "";
 let filterCategory = "all"; // talent side tabs
-/** @type {'open'|'closed'} ??�???? ???????: ?? ??*/
+/** @type {'open'|'closed'} 공고·지원자 사이드 기본: 진행 중 */
 let filterPostingStatus = "open";
-/** ??�????: ???????? (??????= ???) */
+/** 공고·지원자: 플랫폼 필터 (빈 문자열 = 전체) */
 let filterPlatformSide = "";
-/** ???? ?? ??? ????(??????= ??? ??? ???) */
+/** 지원자 탭: 특정 공고만 (빈 문자열 = 해당 상태 전체) */
 let filterApplicantPostingId = "";
-/** ???? ?????? ?? ?? */
+/** 지원자 사이드용 공고 캐시 */
 let postingNavRows = [];
-/** ?? ??? ????? ???? */
+/** 공고 선택 시 하단 지원자 */
 let selectedPostingApps = [];
 let listPage = 1;
 const PAGE_SIZE = 10;
@@ -66,7 +66,7 @@ function isPostingClosed(p) {
   if (p.closed_at) return true;
   if (String(p.meta?.pubType || "") === "2") return true;
   const s = String(p.meta?.status || "");
-  if (/??|??|closed|???|?????/i.test(s)) return true;
+  if (/마감|종료|closed|완료|접수마감/i.test(s)) return true;
   const endMs = postingPeriodEndMs(p);
   if (endMs != null && endMs < Date.now()) return true;
   return false;
@@ -78,8 +78,8 @@ function fmtResumeLastModified(iso) {
   if (!m) return fmtDate(iso);
   const d = new Date(`${m[1]}-${m[2]}-${m[3]}T12:00:00+09:00`);
   if (Number.isNaN(d.getTime())) return `${m[1]}.${m[2]}.${m[3]}`;
-  const wd = ["??, "??, "??, "??, "??, "??, "??][d.getDay()];
-  return `${m[1]}??${Number(m[2])}??${Number(m[3])}??(${wd})`;
+  const wd = ["일", "월", "화", "수", "목", "금", "토"][d.getDay()];
+  return `${m[1]}년 ${Number(m[2])}월 ${Number(m[3])}일 (${wd})`;
 }
 
 function normalizeLoginId(raw) {
@@ -106,9 +106,9 @@ function esc(s) {
 }
 
 function fmtDate(iso) {
-  if (!iso) return "??;
+  if (!iso) return "—";
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "??;
+  if (Number.isNaN(d.getTime())) return "—";
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
 }
 
@@ -154,66 +154,66 @@ function renderDocuments(docs) {
   const resume = resumeDoc(docs);
   const atts = attachmentDocs(docs);
   if (!resume && !atts.length) {
-    return `<p class="muted empty-inline">????? ?????�?????????????.</p>`;
+    return `<p class="muted empty-inline">저장된 이력서·첨부파일이 없습니다.</p>`;
   }
 
   const resumeBlock = resume
     ? `<div class="doc-block">
-        <div class="doc-block-label">?????/div>
-        <a class="pdf-open-btn" href="${esc(resume.file_url)}" target="_blank" rel="noopener" title="?????PDF ???">
+        <div class="doc-block-label">이력서</div>
+        <a class="pdf-open-btn" href="${esc(resume.file_url)}" target="_blank" rel="noopener" title="이력서 PDF 열기">
           ${Icon.file({ size: 18, className: "pdf-open-icon" })}
-          <span class="pdf-open-label">?????PDF ???</span>
+          <span class="pdf-open-label">이력서 PDF 열기</span>
           ${Icon.external({ size: 13, className: "pdf-open-ext" })}
         </a>
         ${
           resume.collected_at
-            ? `<p class="doc-meta muted">${esc(new Date(resume.collected_at).toLocaleDateString("ko-KR"))} ???</p>`
+            ? `<p class="doc-meta muted">${esc(new Date(resume.collected_at).toLocaleDateString("ko-KR"))} 수집</p>`
             : ""
         }
         ${
           selected?.profile_meta?.resumeLastModified
-            ? `<p class="doc-meta muted">???????? ${esc(
+            ? `<p class="doc-meta muted">이 이력서는 ${esc(
                 fmtResumeLastModified(selected.profile_meta.resumeLastModified),
-              )}???? ??????????????.</p>`
+              )}에 최종 수정된 이력서입니다.</p>`
             : ""
         }
       </div>`
     : `<div class="doc-block">
-        <div class="doc-block-label">?????/div>
-        <span class="pdf-open-btn is-disabled" title="PDF ???">
+        <div class="doc-block-label">이력서</div>
+        <span class="pdf-open-btn is-disabled" title="PDF 없음">
           ${Icon.file({ size: 18, className: "pdf-open-icon" })}
-          <span class="pdf-open-label">?????PDF ???</span>
+          <span class="pdf-open-label">이력서 PDF 없음</span>
         </span>
       </div>`;
 
   const attBlock = `<div class="doc-block">
-      <div class="doc-block-label">??????${atts.length ? ` � ${atts.length}` : ""}</div>
+      <div class="doc-block-label">첨부파일${atts.length ? ` · ${atts.length}` : ""}</div>
       ${
         atts.length
           ? `<ul class="doc-attach-list">${atts
               .map((d) => {
-                const kind = d.source_label || (d.doc_type === "portfolio" ? "???????? : "???");
-                const name = d.source_name || "??????";
+                const kind = d.source_label || (d.doc_type === "portfolio" ? "포트폴리오" : "첨부");
+                const name = d.source_name || "첨부파일";
                 return `<li>
-                  <a class="attach-open-btn" href="${esc(d.file_url)}" target="_blank" rel="noopener" title="${esc(name)} ???">
+                  <a class="attach-open-btn" href="${esc(d.file_url)}" target="_blank" rel="noopener" title="${esc(name)} 열기">
                     <span class="attach-kind">${esc(kind)}</span>
                     <span class="attach-name">${esc(name)}</span>
-                    <span class="attach-action">??? ${Icon.external({ size: 13, className: "inline-icon" })}</span>
+                    <span class="attach-action">열기 ${Icon.external({ size: 13, className: "inline-icon" })}</span>
                   </a>
                 </li>`;
               })
               .join("")}</ul>`
-          : `<p class="muted empty-inline">?????? ???</p>`
+          : `<p class="muted empty-inline">첨부파일 없음</p>`
       }
     </div>`;
 
   return `<div class="doc-panel">${resumeBlock}${attBlock}</div>`;
 }
 
-function renderProfileLinkRow(profileUrl, docs, { label = "????? ?????, listMode = false } = {}) {
+function renderProfileLinkRow(profileUrl, docs, { label = "잡코리아 프로필", listMode = false } = {}) {
   const profileLink = profileUrl
     ? `<a class="profile-origin-link" href="${esc(profileUrl)}" target="_blank" rel="noopener">${esc(label)} ${Icon.external({ size: 14, className: "inline-icon" })}</a>`
-    : `<span class="muted">${listMode ? "?? ???? ?? ?? ???" : "??????? ???"}</span>`;
+    : `<span class="muted">${listMode ? "공고 지원자 목록 링크 없음" : "프로필 링크 없음"}</span>`;
   return `<div class="profile-link-row">${profileLink}</div>`;
 }
 
@@ -229,9 +229,9 @@ function renderConfigMissing() {
   appEl.innerHTML = `
     <div class="login-shell">
       <div class="config-warn">
-        <strong>Supabase ???????????.</strong>
-        <p style="margin:8px 0 0">??: <code>web/config.example.js</code> ??<code>web/config.js</code> ?? ??
-        <code>SUPABASE_URL</code> / <code>SUPABASE_ANON_KEY</code> ???.</p>
+        <strong>Supabase 설정이 없습니다.</strong>
+        <p style="margin:8px 0 0">로컬: <code>web/config.example.js</code> → <code>web/config.js</code> 복사 후
+        <code>SUPABASE_URL</code> / <code>SUPABASE_ANON_KEY</code> 입력.</p>
       </div>
     </div>`;
 }
@@ -241,16 +241,16 @@ function renderLogin(errorMsg = "") {
     <div class="login-shell">
       <form class="login-card" id="login-form">
         <h1 class="brand">TBELL <span>Employ</span></h1>
-        <p class="sub">???????? ?? ?????? ????????.</p>
+        <p class="sub">아이디 또는 기업 이메일로 로그인합니다.</p>
         <div class="field">
-          <label for="email">?????/ ?????/label>
-          <input id="email" name="email" type="text" autocomplete="username" required placeholder="tbelltest ??? name@tbell.co.kr" />
+          <label for="email">아이디 / 이메일</label>
+          <input id="email" name="email" type="text" autocomplete="username" required placeholder="tbelltest 또는 name@tbell.co.kr" />
         </div>
         <div class="field">
-          <label for="password">?????</label>
+          <label for="password">비밀번호</label>
           <input id="password" name="password" type="password" autocomplete="current-password" required />
         </div>
-        <button class="btn btn-primary" type="submit">????/button>
+        <button class="btn btn-primary" type="submit">로그인</button>
         ${errorMsg ? `<div class="err">${esc(errorMsg)}</div>` : ""}
       </form>
     </div>`;
@@ -285,14 +285,14 @@ function destroyDashCharts() {
 }
 
 function shell(innerList, innerDetail, { fullWidth = false } = {}) {
-  const who = staff?.display_name || staff?.email || "??;
+  const who = staff?.display_name || staff?.email || "—";
   const role = roleLabel(staff?.role);
   const nick = staff?.nickname ? `@${staff.nickname}` : "";
   const tabs = [
-    ["dashboard", "???????],
-    ["postings", "??"],
-    ["applicants", "????"],
-    ["talent", "??????],
+    ["dashboard", "대시보드"],
+    ["postings", "공고"],
+    ["applicants", "지원자"],
+    ["talent", "인재검색"],
   ];
   appEl.innerHTML = `
     <div class="app-shell">
@@ -307,11 +307,11 @@ function shell(innerList, innerDetail, { fullWidth = false } = {}) {
             .join("")}
         </nav>
         <div class="userbox">
-          <button type="button" class="user-chip" id="btn-profile" title="?????�??????">
+          <button type="button" class="user-chip" id="btn-profile" title="프로필·알림 설정">
             <span class="user-name">${esc(who)}</span>
-            <span class="user-meta">${esc([nick, role].filter(Boolean).join(" � "))}</span>
+            <span class="user-meta">${esc([nick, role].filter(Boolean).join(" · "))}</span>
           </button>
-          <button type="button" class="btn btn-ghost btn-sm" id="btn-logout">?????</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="btn-logout">로그아웃</button>
         </div>
       </header>
       <div class="main ${fullWidth ? "main-full" : ""}">
@@ -365,7 +365,7 @@ function closeDetailDrawer() {
   document.querySelectorAll(".candidate-card.selected").forEach((x) => x.classList.remove("selected"));
   const pane = document.getElementById("detail-pane");
   if (pane) {
-    pane.innerHTML = `<div class="empty detail-empty">????? ??????????????</div>`;
+    pane.innerHTML = `<div class="empty detail-empty">목록에서 항목을 선택하세요.</div>`;
   }
 }
 
@@ -379,7 +379,7 @@ function wrapDetail(title, subtitle, bodyHtml, { badges = "" } = {}) {
         </div>
         ${subtitle ? `<p class="detail-sub">${subtitle}</p>` : ""}
       </div>
-      <button type="button" class="detail-close" id="btn-detail-close" aria-label="???">${Icon.close({ size: 18 })}</button>
+      <button type="button" class="detail-close" id="btn-detail-close" aria-label="닫기">${Icon.close({ size: 18 })}</button>
     </div>
     <div class="detail-scroll">${bodyHtml}</div>`;
 }
@@ -393,7 +393,7 @@ function detailSection(title, bodyHtml, { icon = "" } = {}) {
 }
 
 function detailFacts(items) {
-  const rows = items.filter(([, v]) => v != null && v !== "" && v !== "??);
+  const rows = items.filter(([, v]) => v != null && v !== "" && v !== "—");
   if (!rows.length) return "";
   return `<div class="detail-facts">${rows
     .map(
@@ -406,15 +406,15 @@ function detailFacts(items) {
 }
 
 function infoRows(entries) {
-  const rows = entries.filter(([, v]) => v != null && v !== "" && v !== "??);
-  if (!rows.length) return `<p class="muted">??? ???</p>`;
+  const rows = entries.filter(([, v]) => v != null && v !== "" && v !== "—");
+  if (!rows.length) return `<p class="muted">정보 없음</p>`;
   return `<dl class="info-rows">${rows
     .map(([k, v]) => `<div class="info-row"><dt>${esc(k)}</dt><dd>${v}</dd></div>`)
     .join("")}</dl>`;
 }
 
 function renderTagChips(tags, { canRemove = false } = {}) {
-  if (!tags.length) return `<p class="muted empty-inline">??? ??????????</p>`;
+  if (!tags.length) return `<p class="muted empty-inline">아직 추천이 없습니다</p>`;
   return `<div class="chip-row tag-chips">${tags
     .map(
       (t) => `<span class="chip tag-chip">
@@ -423,7 +423,7 @@ function renderTagChips(tags, { canRemove = false } = {}) {
         <span class="tag-author">${esc(staffNick(t.staff))}</span>
         ${
           canRemove && caps().canRecommend && t.tagged_by === staff?.id
-            ? `<button type="button" data-rm-tag="${esc(t.id)}" title="????? ???" class="icon-btn">${Icon.close({ size: 14 })}</button>`
+            ? `<button type="button" data-rm-tag="${esc(t.id)}" title="내 태그 제거" class="icon-btn">${Icon.close({ size: 14 })}</button>`
             : ""
         }
       </span>`,
@@ -438,9 +438,9 @@ function bindDetailClose() {
 }
 
 async function openProfileSettings() {
-  // ?? ????(?????�???�???? ??: ??�??? ???
+  // 모든 역할(운영자·추천자·조회자) 공통: 별명·알림 설정
   if (!staff || staff._unlinked || !staff.id) {
-    toast("?? ?????? ??????? ???????? ?????? ???????", true);
+    toast("직원 프로필이 연결되지 않았습니다. 관리자에게 문의하세요.", true);
     return;
   }
   const root = document.getElementById("modal-root");
@@ -456,7 +456,7 @@ async function openProfileSettings() {
     openPostings = (allPostings || []).filter((p) => !isPostingClosed(p));
     interested = new Set(interestIds || []);
   } catch (e) {
-    toast(e.message || "??? ??? ?? ???", true);
+    toast(e.message || "알림 설정 로드 실패", true);
   }
 
   const rt =
@@ -473,30 +473,30 @@ async function openProfileSettings() {
       <div class="modal-card" role="dialog" aria-labelledby="profile-title">
         <div class="detail-header" style="padding:0 0 12px;border:0;background:transparent">
           <div class="detail-header-text">
-            <h3 id="profile-title" style="margin:0">?????</h3>
-            <p class="muted" style="margin:4px 0 0">${esc(staff.email || "")} � ${esc(roleLabel(staff.role))}</p>
+            <h3 id="profile-title" style="margin:0">내 설정</h3>
+            <p class="muted" style="margin:4px 0 0">${esc(staff.email || "")} · ${esc(roleLabel(staff.role))}</p>
           </div>
-          <button type="button" class="detail-close" id="pf-cancel" aria-label="???">${Icon.close({ size: 18 })}</button>
+          <button type="button" class="detail-close" id="pf-cancel" aria-label="닫기">${Icon.close({ size: 18 })}</button>
         </div>
         <div class="stack">
           <div class="pf-field">
-            <label for="pf-display">??? ???</label>
-            <input id="pf-display" value="${esc(staff.display_name || "")}" placeholder="?? ???? />
+            <label for="pf-display">표시 이름</label>
+            <input id="pf-display" value="${esc(staff.display_name || "")}" placeholder="예: 주호정" />
           </div>
           <div class="pf-field">
-            <label for="pf-nick">?? (?? ????????)</label>
-            <input id="pf-nick" value="${esc(staff.nickname || "")}" placeholder="?? yj.kim" />
+            <label for="pf-nick">별명 (추천 태그에 표시)</label>
+            <input id="pf-nick" value="${esc(staff.nickname || "")}" placeholder="예: yj.kim" />
           </div>
           <div class="pf-field">
-            <label>?? ???</label>
+            <label>메일 알림</label>
             <div class="notify-checks">
-              <label><input type="checkbox" id="pf-rt" ${rt ? "checked" : ""} /> ????????</label>
-              <label><input type="checkbox" id="pf-dg" ${dg ? "checked" : ""} /> ?? ????????(07:30)</label>
+              <label><input type="checkbox" id="pf-rt" ${rt ? "checked" : ""} /> 실시간 알림</label>
+              <label><input type="checkbox" id="pf-dg" ${dg ? "checked" : ""} /> 모닝 다이제스트 (07:30)</label>
             </div>
           </div>
           <div class="pf-field">
-            <label>??? ?? ?? (?? ??� ???</label>
-            <p class="pf-hint">??????? ??????? ???? ???????????????????. ??????? ?? ????</p>
+            <label>알림 받을 공고 (진행 중 · 관심)</label>
+            <p class="pf-hint">선택하지 않으면 진행 중 공고 전체에 대해 알림을 받습니다. 둘 다 끄면 메일 미수신.</p>
             <div class="interest-list" id="pf-interest">
               ${
                 openPostings.length
@@ -504,19 +504,19 @@ async function openProfileSettings() {
                       .map(
                         (p) => `<label>
                           <input type="checkbox" data-pid="${esc(p.id)}" ${interested.has(p.id) ? "checked" : ""} />
-                          <span>${esc(p.title || "(??? ???)")}
-                            <span class="muted"> � ${esc(platformLabel(p.platform))}</span>
+                          <span>${esc(p.title || "(제목 없음)")}
+                            <span class="muted"> · ${esc(platformLabel(p.platform))}</span>
                           </span>
                         </label>`,
                       )
                       .join("")
-                  : `<p class="muted">?? ????? ??????.</p>`
+                  : `<p class="muted">진행 중 공고가 없습니다.</p>`
               }
             </div>
           </div>
         </div>
         <div class="actions" style="margin-top:16px">
-          <button type="button" class="btn btn-primary btn-sm" id="pf-save" style="width:auto">????/button>
+          <button type="button" class="btn btn-primary btn-sm" id="pf-save" style="width:auto">저장</button>
         </div>
       </div>
     </div>`;
@@ -531,7 +531,7 @@ async function openProfileSettings() {
   document.getElementById("pf-save")?.addEventListener("click", async () => {
     try {
       const nickname = document.getElementById("pf-nick").value.trim();
-      if (!nickname) return toast("????????????, true);
+      if (!nickname) return toast("별명을 입력하세요", true);
       const notifyRealtime = document.getElementById("pf-rt").checked;
       const notifyDigest = document.getElementById("pf-dg").checked;
       const postingIds = [...document.querySelectorAll("#pf-interest [data-pid]:checked")].map((el) =>
@@ -544,7 +544,7 @@ async function openProfileSettings() {
         notifyDigest,
       });
       await api.setMyPostingNotify(sb, staff.id, postingIds);
-      toast("??? ?????");
+      toast("설정 저장됨");
       close();
       await refresh(false);
     } catch (e) {
@@ -557,17 +557,17 @@ function listToolbar(title, { showPlatform = true } = {}) {
   return `
     <div class="toolbar">
       <h2>${esc(title)}</h2>
-      <input class="search" id="q" placeholder="????? value="${esc(filterQ)}" />
+      <input class="search" id="q" placeholder="검색…" value="${esc(filterQ)}" />
       ${
         showPlatform
           ? `<select class="select" id="platform">
-        <option value="">??? ?????/option>
-        <option value="jobkorea" ${filterPlatform === "jobkorea" ? "selected" : ""}>?????</option>
-        <option value="saramin" ${filterPlatform === "saramin" ? "selected" : ""}>?????/option>
+        <option value="">전체 플랫폼</option>
+        <option value="jobkorea" ${filterPlatform === "jobkorea" ? "selected" : ""}>잡코리아</option>
+        <option value="saramin" ${filterPlatform === "saramin" ? "selected" : ""}>사람인</option>
       </select>`
           : ""
       }
-      <button type="button" class="btn btn-ghost btn-sm" id="btn-refresh">?????</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="btn-refresh">새로고침</button>
     </div>`;
 }
 
@@ -640,7 +640,7 @@ function syncListPageForSelection() {
 }
 
 function listTabTitle() {
-  return tab === "postings" ? "?? ??" : tab === "applicants" ? "?? ????" : "??????;
+  return tab === "postings" ? "채용 공고" : tab === "applicants" ? "공고 지원자" : "인재검색";
 }
 
 function listCardsHtml() {
@@ -664,11 +664,11 @@ function renderPagination() {
       `<button type="button" class="page-num ${p === listPage ? "active" : ""}" data-page="${p}">${p}</button>`,
     );
   }
-  return `<nav class="list-pagination" aria-label="????">
-    <button type="button" class="btn btn-ghost btn-sm page-nav" id="page-prev" ${listPage <= 1 ? "disabled" : ""}>???</button>
+  return `<nav class="list-pagination" aria-label="페이지">
+    <button type="button" class="btn btn-ghost btn-sm page-nav" id="page-prev" ${listPage <= 1 ? "disabled" : ""}>이전</button>
     <div class="page-nums">${pages.join("")}</div>
-    <span class="page-info">${from}??{to} / ${list.length}</span>
-    <button type="button" class="btn btn-ghost btn-sm page-nav" id="page-next" ${listPage >= total ? "disabled" : ""}>???</button>
+    <span class="page-info">${from}–${to} / ${list.length}</span>
+    <button type="button" class="btn btn-ghost btn-sm page-nav" id="page-next" ${listPage >= total ? "disabled" : ""}>다음</button>
   </nav>`;
 }
 
@@ -680,7 +680,7 @@ function talentCategoryNav() {
     const id = resolveTalentCategory(r);
     counts[id] = (counts[id] || 0) + 1;
   }
-  return `<nav class="cat-side" aria-label="??? ????">
+  return `<nav class="cat-side" aria-label="인재 카테고리">
     ${JOB_CATEGORIES.map((c) => {
       const n = counts[c.id] ?? 0;
       return `<button type="button" class="cat-side-btn ${filterCategory === c.id ? "active" : ""}" data-cat="${c.id}">
@@ -708,17 +708,17 @@ function platformSideButtons(status) {
   const active = filterPostingStatus === status;
   return `
     <div class="cat-side-group ${active ? "" : "is-collapsed"}">
-      <div class="cat-side-heading">?????/div>
+      <div class="cat-side-heading">플랫폼</div>
       <button type="button" class="cat-side-btn sub ${active && !filterPlatformSide ? "active" : ""}" data-pstatus="${status}" data-platform="">
-        <span class="cat-side-label">???</span>
+        <span class="cat-side-label">전체</span>
         <span class="cat-side-count">${allN}</span>
       </button>
       <button type="button" class="cat-side-btn sub ${active && filterPlatformSide === "jobkorea" ? "active" : ""}" data-pstatus="${status}" data-platform="jobkorea">
-        <span class="cat-side-label">?????</span>
+        <span class="cat-side-label">잡코리아</span>
         <span class="cat-side-count">${jkN}</span>
       </button>
       <button type="button" class="cat-side-btn sub ${active && filterPlatformSide === "saramin" ? "active" : ""}" data-pstatus="${status}" data-platform="saramin">
-        <span class="cat-side-label">?????/span>
+        <span class="cat-side-label">사람인</span>
         <span class="cat-side-count">${srN}</span>
       </button>
     </div>`;
@@ -728,7 +728,7 @@ function postingStatusNav() {
   if (tab !== "postings") return "";
   const openN = rows.filter((r) => !isPostingClosed(r)).length;
   const closedN = rows.filter((r) => isPostingClosed(r)).length;
-  return `<nav class="cat-side" aria-label="?? ???">
+  return `<nav class="cat-side" aria-label="공고 상태">
     <button type="button" class="cat-side-btn ${filterPostingStatus === "open" ? "active" : ""}" data-pstatus="open">
       <span class="cat-side-label">${esc(POSTING_STATUS_SIDE.open)}</span>
       <span class="cat-side-count">${openN}</span>
@@ -764,7 +764,7 @@ function applicantSideNav() {
     return statusOk && platformOk;
   });
 
-  return `<nav class="cat-side" aria-label="???? ?? ???">
+  return `<nav class="cat-side" aria-label="지원자 공고 필터">
     <button type="button" class="cat-side-btn ${filterPostingStatus === "open" ? "active" : ""}" data-pstatus="open">
       <span class="cat-side-label">${esc(POSTING_STATUS_SIDE.open)}</span>
       <span class="cat-side-count">${openAppN}</span>
@@ -776,9 +776,9 @@ function applicantSideNav() {
     </button>
     ${platformSideButtons("closed")}
     <div class="cat-side-group">
-      <div class="cat-side-heading">????/div>
+      <div class="cat-side-heading">공고별</div>
       <button type="button" class="cat-side-btn sub ${!filterApplicantPostingId ? "active" : ""}" data-app-posting="">
-        <span class="cat-side-label">???</span>
+        <span class="cat-side-label">전체</span>
         <span class="cat-side-count">${visibleForStatus.length}</span>
       </button>
       ${statusPostings
@@ -787,7 +787,7 @@ function applicantSideNav() {
           return `<button type="button" class="cat-side-btn sub ${
             filterApplicantPostingId === p.id ? "active" : ""
           }" data-app-posting="${esc(p.id)}" title="${esc(p.title || "")}">
-            <span class="cat-side-label">${esc(p.title || "(??? ???)")}</span>
+            <span class="cat-side-label">${esc(p.title || "(제목 없음)")}</span>
             <span class="cat-side-count">${n}</span>
           </button>`;
         })
@@ -799,27 +799,27 @@ function applicantSideNav() {
 function renderPostingApplicantsInDetail() {
   const blocked = selected?.meta?.applicantAccessBlocked;
   const liveTotal = selected?.meta?.applicantCounts
-    ? Object.entries(selected.meta.applicantCounts).find(([k]) => k.includes("???"))?.[1]
+    ? Object.entries(selected.meta.applicantCounts).find(([k]) => k.includes("전체"))?.[1]
     : null;
   if (!selectedPostingApps.length) {
     const emptyMsg = blocked
-      ? `????? ??????? 90????? ???????? ???????????????.${
-          liveTotal != null ? ` ??????? ${liveTotal}??? ?????? ??? ????? ????????` : ""
+      ? `잡코리아 정책상 최근 90일 이내 공고만 지원자 상세를 열 수 있습니다.${
+          liveTotal != null ? ` 목록상 전체 ${liveTotal}명은 표시되나 상세 수집은 불가합니다.` : ""
         }`
-      : "???????????????? ??????.";
+      : "이 공고에 수집된 지원자가 없습니다.";
     return `<div class="posting-apps-panel">
-      <h3 class="section-title">???? ???? <span class="muted">0??/span></h3>
+      <h3 class="section-title">이 공고 지원자 <span class="muted">0명</span></h3>
       <div class="empty">${esc(emptyMsg)}</div>
     </div>`;
   }
   return `<div class="posting-apps-panel">
-    <h3 class="section-title">???? ???? <span class="muted">${selectedPostingApps.length}??{
-      liveTotal != null ? ` / ??? ${liveTotal}` : ""
+    <h3 class="section-title">이 공고 지원자 <span class="muted">${selectedPostingApps.length}명${
+      liveTotal != null ? ` / 전체 ${liveTotal}` : ""
     }</span></h3>
     <div class="card-list detail-app-list">${selectedPostingApps
       .map((r) => {
         const meta = r.profile_meta || {};
-        const name = r.candidate?.name || "(??? ???)";
+        const name = r.candidate?.name || "(이름 없음)";
         return `<article class="candidate-card" data-goto-app="${esc(r.id)}">
           <div class="card-name-row">
             <span class="card-name">${esc(name)}</span>
@@ -827,7 +827,7 @@ function renderPostingApplicantsInDetail() {
             <span class="meta-pill stage">${esc(stageLabel(r.current_stage))}</span>
           </div>
           <div class="card-sub">${esc(
-            [meta.genderAge, meta.careerTotal, meta.position].filter(Boolean).join(" � ") || "??,
+            [meta.genderAge, meta.careerTotal, meta.position].filter(Boolean).join(" · ") || "—",
           )}</div>
         </article>`;
       })
@@ -985,68 +985,68 @@ function renderDashboard() {
   const recent = (s.recentApps || [])
     .map(
       (r) => `<tr class="dash-row" data-goto-app="${esc(r.id)}">
-        <td><b>${esc(r.candidate?.name || "(??? ???)")}</b></td>
-        <td class="muted">${esc(r.posting?.title || "?? ????)}</td>
+        <td><b>${esc(r.candidate?.name || "(이름 없음)")}</b></td>
+        <td class="muted">${esc(r.posting?.title || "공고 미연결")}</td>
         <td><span class="meta-pill stage">${esc(stageLabel(r.current_stage))}</span></td>
         <td class="muted">${esc(fmtDate(r.applied_at))}</td>
       </tr>`,
     )
     .join("");
 
-  const trendTitle = dashTrendMode === "talents" ? "??? ????????" : "??? ?????";
+  const trendTitle = dashTrendMode === "talents" ? "일별 인재검색 추이" : "일별 지원 추이";
 
   return `
     <div class="dash-page">
       <div class="toolbar">
-        <h2>???????/h2>
-        <button type="button" class="btn btn-ghost btn-sm" id="btn-refresh">?????</button>
+        <h2>대시보드</h2>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-refresh">새로고침</button>
       </div>
       <div class="dash-links">
-        <a class="dash-link" href="https://www.jobkorea.co.kr/Corp/Main" target="_blank" rel="noopener">????? ????? ${Icon.external({ size: 13 })}</a>
-        <a class="dash-link" href="https://www.saramin.co.kr/zf_user/memcom/main" target="_blank" rel="noopener">?????????? ${Icon.external({ size: 13 })}</a>
+        <a class="dash-link" href="https://www.jobkorea.co.kr/Corp/Main" target="_blank" rel="noopener">잡코리아 기업회원 ${Icon.external({ size: 13 })}</a>
+        <a class="dash-link" href="https://www.saramin.co.kr/zf_user/memcom/main" target="_blank" rel="noopener">사람인 기업회원 ${Icon.external({ size: 13 })}</a>
       </div>
       <div class="dash-kpis">
         <button type="button" class="dash-card" data-jump="applicants">
-          <div class="dash-label">??? ????</div>
+          <div class="dash-label">어제 지원자</div>
           <div class="dash-num">${s.applicantsYesterday ?? 0}</div>
-          <div class="dash-sub muted">${esc(s.yesterdayLabel || "???")}</div>
+          <div class="dash-sub muted">${esc(s.yesterdayLabel || "전일")}</div>
         </button>
         <button type="button" class="dash-card" data-jump="applicants">
-          <div class="dash-label">?????????</div>
+          <div class="dash-label">이번주 지원자</div>
           <div class="dash-num">${s.applicantsThisWeek ?? 0}</div>
-          <div class="dash-sub muted">${esc(s.weekLabel || "??????)}</div>
+          <div class="dash-sub muted">${esc(s.weekLabel || "월–오늘")}</div>
         </button>
         <button type="button" class="dash-card" data-jump="talent">
-          <div class="dash-label">??????/div>
+          <div class="dash-label">인재검색</div>
           <div class="dash-num">${s.talents}</div>
-          <div class="dash-sub muted">???</div>
+          <div class="dash-sub muted">누적</div>
         </button>
         <button type="button" class="dash-card" data-jump="postings">
-          <div class="dash-label">??</div>
+          <div class="dash-label">공고</div>
           <div class="dash-num">${s.postings}</div>
-          <div class="dash-sub muted">???</div>
+          <div class="dash-sub muted">누적</div>
         </button>
       </div>
       <div class="dash-charts dash-charts-single">
         <div class="panel chart-panel chart-panel-wide">
           <div class="chart-head">
-            <h3>${trendTitle} <span class="muted chart-sub">?? 14??/span></h3>
-            <div class="chart-filters" role="group" aria-label="?? ???">
-              <button type="button" class="chip-filter ${dashTrendMode === "apps" ? "active" : ""}" data-trend="apps">????</button>
-              <button type="button" class="chip-filter ${dashTrendMode === "talents" ? "active" : ""}" data-trend="talents">??????/button>
+            <h3>${trendTitle} <span class="muted chart-sub">최근 14일</span></h3>
+            <div class="chart-filters" role="group" aria-label="추이 필터">
+              <button type="button" class="chip-filter ${dashTrendMode === "apps" ? "active" : ""}" data-trend="apps">지원자</button>
+              <button type="button" class="chip-filter ${dashTrendMode === "talents" ? "active" : ""}" data-trend="talents">인재검색</button>
             </div>
           </div>
           <div class="chart-wrap chart-wrap-lg"><canvas id="chart-trend-daily"></canvas></div>
         </div>
       </div>
       <div class="panel dash-recent">
-        <h3>?? ????</h3>
+        <h3>최근 지원자</h3>
         <div class="table-scroll">
           <table class="dash-table">
             <thead>
-              <tr><th>???</th><th>??</th><th>???</th><th>????</th></tr>
+              <tr><th>이름</th><th>공고</th><th>단계</th><th>지원일</th></tr>
             </thead>
-            <tbody>${recent || `<tr><td colspan="4" class="muted">???</td></tr>`}</tbody>
+            <tbody>${recent || `<tr><td colspan="4" class="muted">없음</td></tr>`}</tbody>
           </table>
         </div>
       </div>
@@ -1079,7 +1079,7 @@ function mountDashboardCharts() {
         labels: series?.labels || [],
         datasets: [
           {
-            label: isTalent ? "???" : "???,
+            label: isTalent ? "인재" : "지원",
             data: series?.values || [],
             borderColor: color,
             backgroundColor: soft,
@@ -1140,7 +1140,7 @@ function mountDashboardCharts() {
 function renderPostingCards() {
   if (!visibleRows().length) {
     return `<div class="empty">${
-      filterPostingStatus === "closed" ? "??????? ??????." : "?? ????? ??????."
+      filterPostingStatus === "closed" ? "마감된 공고가 없습니다." : "진행 중 공고가 없습니다."
     }</div>`;
   }
   return `<div class="card-list">${pageRows()
@@ -1149,16 +1149,16 @@ function renderPostingCards() {
       const meta = r.meta || {};
       return `<article class="candidate-card ${sel}" data-id="${esc(r.id)}">
         <div class="card-name-row">
-          <span class="card-name">${esc(r.title || "(??? ???)")}</span>
+          <span class="card-name">${esc(r.title || "(제목 없음)")}</span>
           ${meta.status ? `<span class="badge">${esc(meta.status)}</span>` : ""}
         </div>
         <div class="card-meta-row">
           <span class="meta-pill platform" title="${esc(platformLabel(r.platform))}">${platformIcon(r.platform)}</span>
-          <span class="meta-pill">${esc(meta.postingNumber || r.external_posting_id || "??)}</span>
-          <span class="meta-pill stage">???${r.applicant_count ?? 0}??/span>
+          <span class="meta-pill">${esc(meta.postingNumber || r.external_posting_id || "—")}</span>
+          <span class="meta-pill stage">지원 ${r.applicant_count ?? 0}명</span>
         </div>
         <div class="card-footer">
-          <span class="muted">${esc(meta.manager || "???????)}${meta.period ? ` � ${esc(meta.period)}` : ""}</span>
+          <span class="muted">${esc(meta.manager || "담당자 —")}${meta.period ? ` · ${esc(meta.period)}` : ""}</span>
         </div>
       </article>`;
     })
@@ -1169,10 +1169,10 @@ function renderApplicantsCards() {
   if (!visibleRows().length) {
     return `<div class="empty">${
       filterApplicantPostingId
-        ? "???????????? ????? ??????."
+        ? "이 공고에 해당하는 지원자가 없습니다."
         : filterPostingStatus === "closed"
-          ? "?? ?? ????? ??????."
-          : "?? ???? ????? ??????. ??? ??? ????????????"
+          ? "마감 공고 지원자가 없습니다."
+          : "진행 중 공고 지원자가 없습니다. 크롤 수집 후 새로고침하세요."
     }</div>`;
   }
   return `<div class="card-list">${pageRows()
@@ -1180,16 +1180,16 @@ function renderApplicantsCards() {
       const sel = selected?.id === r.id ? "selected" : "";
       const meta = r.profile_meta || {};
       const postingMeta = r.posting?.meta || {};
-      const name = r.candidate?.name || "(??? ???)";
-      const posting = r.posting?.title || "????????;
-      const postingNo = postingMeta.postingNumber ? ` � ${postingMeta.postingNumber}` : "";
+      const name = r.candidate?.name || "(이름 없음)";
+      const posting = r.posting?.title || "공고명 미수집";
+      const postingNo = postingMeta.postingNumber ? ` · ${postingMeta.postingNumber}` : "";
       const badges = [
         isNew(r.created_at || r.applied_at) ? `<span class="badge new">NEW</span>` : "",
-        !r.is_active || !r.candidate?.is_active ? `<span class="badge blocked">??</span>` : "",
+        !r.is_active || !r.candidate?.is_active ? `<span class="badge blocked">블락</span>` : "",
         meta.platformStatus ? `<span class="badge">${esc(meta.platformStatus)}</span>` : "",
       ].join(" ");
       const subParts = [meta.genderAge, meta.careerTotal].filter(Boolean);
-      const edu = [meta.educationLevel, meta.educationSchool, meta.educationMajor].filter(Boolean).join(" � ");
+      const edu = [meta.educationLevel, meta.educationSchool, meta.educationMajor].filter(Boolean).join(" · ");
 
       return `<article class="candidate-card ${sel}" data-id="${esc(r.id)}">
         <div class="card-top">
@@ -1199,7 +1199,7 @@ function renderApplicantsCards() {
               <span class="card-name">${esc(name)}</span>
               ${badges}
             </div>
-            ${subParts.length ? `<div class="card-sub">${esc(subParts.join(" � "))}</div>` : ""}
+            ${subParts.length ? `<div class="card-sub">${esc(subParts.join(" · "))}</div>` : ""}
           </div>
           <div class="card-top-side">
             ${meta.desiredSalary ? `<span class="card-salary">${esc(meta.desiredSalary)}</span>` : ""}
@@ -1221,16 +1221,16 @@ function renderApplicantsCards() {
 }
 
 function renderTalentCards() {
-  if (!rows.length) return `<div class="empty">?????????? ??????.</div>`;
+  if (!rows.length) return `<div class="empty">인재검색 후보가 없습니다.</div>`;
   return `<div class="card-list">${pageRows()
     .map((r) => {
       const sel = selected?.id === r.id ? "selected" : "";
       const meta = r.profile_meta || {};
-      const name = r.candidate?.name || meta.name || "(??? ???)";
+      const name = r.candidate?.name || meta.name || "(이름 없음)";
       const headline = r.headline || "";
       const badges = [
         isNew(r.sourced_at) ? `<span class="badge new">NEW</span>` : "",
-        !r.is_active ? `<span class="badge blocked">??</span>` : "",
+        !r.is_active ? `<span class="badge blocked">블락</span>` : "",
       ].join(" ");
       const subParts = [meta.genderAge, meta.careerText].filter(Boolean);
 
@@ -1242,7 +1242,7 @@ function renderTalentCards() {
               <span class="card-name">${esc(name)}</span>
               ${badges}
             </div>
-            ${subParts.length ? `<div class="card-sub">${esc(subParts.join(" � "))}</div>` : ""}
+            ${subParts.length ? `<div class="card-sub">${esc(subParts.join(" · "))}</div>` : ""}
           </div>
           <div class="card-top-side">
             <span class="meta-pill stage">${esc(proposalLabel(r.proposal_status))}</span>
@@ -1275,15 +1275,15 @@ async function renderDetail() {
     pane.classList.remove("is-open");
     document.getElementById("detail-backdrop")?.classList.remove("is-open");
     document.body.style.overflow = "";
-    pane.innerHTML = `<div class="empty detail-empty">????? ??????????????</div>`;
+    pane.innerHTML = `<div class="empty detail-empty">목록에서 항목을 선택하세요.</div>`;
     return;
   }
 
   if ((tab === "applicants" || tab === "talent") && (staff?._unlinked || !staff?.id)) {
     pane.innerHTML = wrapDetail(
-      "?? ??? ???",
-      "?????? ???????,
-      `<div class="panel"><p class="muted">?????? ??????staff_profiles ? ??????? ????????</p></div>`,
+      "권한 연결 필요",
+      "관리자에게 문의하세요",
+      `<div class="panel"><p class="muted">로그인은 됐지만 staff_profiles 가 연결되지 않았습니다.</p></div>`,
     );
     bindDetailClose();
     openDetailDrawer();
@@ -1302,37 +1302,37 @@ async function renderPostingDetail(pane) {
   const r = selected;
   const meta = r.meta || {};
   const liveTotal = meta.applicantCounts
-    ? Object.entries(meta.applicantCounts).find(([k]) => k.includes("???"))?.[1]
+    ? Object.entries(meta.applicantCounts).find(([k]) => k.includes("전체"))?.[1]
     : null;
   const body = `
     ${detailSection(
-      "?? ???",
+      "공고 정보",
       infoRows([
-        ["????", esc(meta.postingNumber || r.external_posting_id || "??)],
-        ["???", esc(meta.status || (isPostingClosed(r) ? "??" : "?? ??))],
-        ["?????, esc(meta.manager || "??)],
-        ["??", esc(meta.period || "??)],
+        ["공고번호", esc(meta.postingNumber || r.external_posting_id || "—")],
+        ["상태", esc(meta.status || (isPostingClosed(r) ? "마감" : "진행 중"))],
+        ["담당자", esc(meta.manager || "—")],
+        ["기간", esc(meta.period || "—")],
         [
-          "????",
-          `${selectedPostingApps.length || r.applicant_count || 0}?????${
-            liveTotal != null ? ` � ????? ??? ${liveTotal}?? : ""
+          "지원자",
+          `${selectedPostingApps.length || r.applicant_count || 0}명 수집${
+            liveTotal != null ? ` · 잡코리아 전체 ${liveTotal}명` : ""
           }`,
         ],
         [
-          "??? ??",
+          "원본 링크",
           r.source_url
-            ? `<a href="${esc(r.source_url)}" target="_blank" rel="noopener">${esc(platformLabel(r.platform))}??? ?? ${Icon.external({ size: 13, className: "inline-icon" })}</a>`
-            : "??,
+            ? `<a href="${esc(r.source_url)}" target="_blank" rel="noopener">${esc(platformLabel(r.platform))}에서 보기 ${Icon.external({ size: 13, className: "inline-icon" })}</a>`
+            : "—",
         ],
       ]),
       { icon: Icon.clipboard({ size: 16 }) },
     )}
     <div class="detail-actions">
-      <button type="button" class="btn btn-primary btn-sm" id="btn-view-apps">???? ????????</button>
+      <button type="button" class="btn btn-primary btn-sm" id="btn-view-apps">지원자 탭에서 보기</button>
     </div>
     ${renderPostingApplicantsInDetail()}`;
 
-  pane.innerHTML = wrapDetail(r.title || "(??? ???)", "", body, {
+  pane.innerHTML = wrapDetail(r.title || "(제목 없음)", "", body, {
     badges: `${platformIcon(r.platform, { large: true })}`,
   });
 
@@ -1359,33 +1359,33 @@ async function renderApplicantDetail(pane) {
     api.listDocuments(sb, { candidateId, applicationId: r.id }),
   ]);
 
-  const name = r.candidate?.name || "(??? ???)";
-  const edu = [meta.educationLevel, meta.educationSchool, meta.educationMajor].filter(Boolean).join(" � ");
+  const name = r.candidate?.name || "(이름 없음)";
+  const edu = [meta.educationLevel, meta.educationSchool, meta.educationMajor].filter(Boolean).join(" · ");
   const headerBadges = [
     platformIcon(r.platform, { large: true }),
     `<span class="stage-pill">${esc(stageLabel(r.current_stage))}</span>`,
     isNew(r.applied_at) ? `<span class="badge new">NEW</span>` : "",
-    !r.is_active || !r.candidate?.is_active ? `<span class="badge blocked">??</span>` : "",
+    !r.is_active || !r.candidate?.is_active ? `<span class="badge blocked">블락</span>` : "",
     meta.platformStatus ? `<span class="badge">${esc(meta.platformStatus)}</span>` : "",
   ]
     .filter(Boolean)
     .join("");
-  const subBits = [meta.position, meta.genderAge, meta.careerTotal ? `?? ${meta.careerTotal}` : ""]
+  const subBits = [meta.position, meta.genderAge, meta.careerTotal ? `경력 ${meta.careerTotal}` : ""]
     .filter(Boolean)
     .map(esc)
-    .join(" � ");
+    .join(" · ");
 
   const highlightHtml = detailFacts([
-    ["??????", esc(meta.desiredSalary || "??)],
-    ["??", esc(meta.careerTotal || "??)],
-    ["???", esc(edu || "??)],
-    ["????", esc(fmtDate(r.applied_at))],
-    ["?????, esc(fmtDate(r.created_at))],
+    ["희망연봉", esc(meta.desiredSalary || "—")],
+    ["경력", esc(meta.careerTotal || "—")],
+    ["학력", esc(edu || "—")],
+    ["지원일", esc(fmtDate(r.applied_at))],
+    ["수집일", esc(fmtDate(r.created_at))],
     [
-      "??????? ?????,
+      "이력서 최종 수정일",
       meta.resumeLastModified
         ? esc(fmtResumeLastModified(meta.resumeLastModified))
-        : "??,
+        : "—",
     ],
   ]);
 
@@ -1394,31 +1394,31 @@ async function renderApplicantDetail(pane) {
     meta.recommendTags?.length ? renderChips(meta.recommendTags, "badge-chip") : "",
     meta.careerHistory?.length ? renderChips(meta.careerHistory) : "",
     detailSection(
-      "?????,
-      infoRows([["?????, esc(r.candidate?.email || "??)]]),
+      "연락처",
+      infoRows([["이메일", esc(r.candidate?.email || "—")]]),
       { icon: Icon.phone({ size: 16 }) },
     ),
     detailSection(
-      "???",
+      "서류",
       renderDocuments(docs),
       { icon: Icon.file({ size: 16 }) },
     ),
     detailSection(
-      "?????,
-      renderProfileLinkRow(applicantListUrl(r), docs, { label: "????? ???? ??", listMode: true }),
+      "프로필",
+      renderProfileLinkRow(applicantListUrl(r), docs, { label: "잡코리아 지원자 목록", listMode: true }),
       { icon: Icon.link({ size: 16 }) },
     ),
     detailSection(
-      "??",
+      "공고",
       infoRows([
-        ["????, esc(r.posting?.title || "????????)],
-        ["????", esc(postingMeta.postingNumber || r.posting?.external_posting_id || "??)],
-        ["?????, esc(postingMeta.manager || "??)],
+        ["공고명", esc(r.posting?.title || "공고명 미수집")],
+        ["공고번호", esc(postingMeta.postingNumber || r.posting?.external_posting_id || "—")],
+        ["담당자", esc(postingMeta.manager || "—")],
         [
-          "?? ??",
+          "공고 보기",
           r.posting?.source_url
-            ? `<a href="${esc(r.posting.source_url)}" target="_blank" rel="noopener">????? ?? ${Icon.external({ size: 13, className: "inline-icon" })}</a>`
-            : "??,
+            ? `<a href="${esc(r.posting.source_url)}" target="_blank" rel="noopener">잡코리아 공고 ${Icon.external({ size: 13, className: "inline-icon" })}</a>`
+            : "—",
         ],
       ]),
       { icon: Icon.clipboard({ size: 16 }) },
@@ -1428,10 +1428,10 @@ async function renderApplicantDetail(pane) {
   const docsHtml = `${
     caps().canRecommend
       ? `<div class="detail-actions">
-          <button type="button" class="btn btn-primary" id="btn-recommend">?????</button>
-          <span class="muted detail-hint">?? <b>${esc(staff?.nickname || "")}</b>??? ???</span>
+          <button type="button" class="btn btn-primary" id="btn-recommend">추천하기</button>
+          <span class="muted detail-hint">별명 <b>${esc(staff?.nickname || "")}</b>으로 표시</span>
         </div>`
-      : `<p class="muted empty-inline">?????�??????? ??? <b>???</b> ?????? ??????????.</p>`
+      : `<p class="muted empty-inline">이력서·첨부파일은 상단 <b>서류</b> 섹션에서 열 수 있습니다.</p>`
   }`;
 
   const tagsHtml = `
@@ -1439,52 +1439,52 @@ async function renderApplicantDetail(pane) {
     ${
       caps().canTagExtra
         ? `<div class="stack tag-form">
-        <label>??? ???</label>
+        <label>기타 태그</label>
         <select id="tag-type">
           ${Object.entries(TAG_LABELS)
             .map(([v, l]) => `<option value="${v}">${esc(l)}</option>`)
             .join("")}
         </select>
-        <input id="tag-comment" placeholder="????(???)" />
-        <button type="button" class="btn btn-primary btn-sm" id="btn-add-tag">??? ????/button>
+        <input id="tag-comment" placeholder="코멘트 (선택)" />
+        <button type="button" class="btn btn-primary btn-sm" id="btn-add-tag">태그 저장</button>
       </div>`
         : ""
     }`;
 
   const pipelineHtml = caps().canManagePipeline
     ? `${detailSection(
-        "??",
+        "면접",
         `<ul class="timeline">
         ${
           interviews.length
             ? interviews
                 .map(
                   (i) => `<li><b>${esc(label(INTERVIEW_RESULT_LABELS, i.result, i.result))}</b>
-                    � ${esc(new Date(i.interview_at).toLocaleString("ko-KR"))}
-                    � ${esc(label(MEETING_LABELS, i.meeting_type, i.meeting_type))}
-                    ${i.interviewer ? `� ${esc(i.interviewer)}` : ""}
+                    · ${esc(new Date(i.interview_at).toLocaleString("ko-KR"))}
+                    · ${esc(label(MEETING_LABELS, i.meeting_type, i.meeting_type))}
+                    ${i.interviewer ? `· ${esc(i.interviewer)}` : ""}
                     ${i.note ? `<div class="muted">${esc(i.note)}</div>` : ""}</li>`,
                 )
                 .join("")
-            : `<li class="muted">??? ???</li>`
+            : `<li class="muted">일정 없음</li>`
         }
       </ul>
       <div class="stack form-block">
-        <label>?? ??? ???</label>
+        <label>면접 일정 등록</label>
         <input id="iv-at" type="datetime-local" />
-        <input id="iv-who" placeholder="???" />
+        <input id="iv-who" placeholder="면접관" />
         <select id="iv-type">
           ${Object.entries(MEETING_LABELS)
             .map(([v, l]) => `<option value="${v}">${esc(l)}</option>`)
             .join("")}
         </select>
-        <textarea id="iv-note" placeholder="??"></textarea>
-        <button type="button" class="btn btn-primary btn-sm" id="btn-schedule">??? ????/button>
+        <textarea id="iv-note" placeholder="메모"></textarea>
+        <button type="button" class="btn btn-primary btn-sm" id="btn-schedule">일정 저장</button>
       </div>
       ${
         interviews[0]
           ? `<div class="stack form-block">
-              <label>?? ?? ??</label>
+              <label>최근 면접 결과</label>
               <select id="iv-result">
                 ${Object.entries(INTERVIEW_RESULT_LABELS)
                   .filter(([k]) => k !== "scheduled")
@@ -1493,20 +1493,20 @@ async function renderApplicantDetail(pane) {
               </select>
               <input id="iv-hired" type="date" />
               <button type="button" class="btn btn-ghost btn-sm" id="btn-iv-result"
-                data-ivid="${esc(interviews[0].id)}">?? ??</button>
+                data-ivid="${esc(interviews[0].id)}">결과 반영</button>
             </div>`
           : ""
       }`,
         { icon: Icon.calendar({ size: 16 }) },
       )}
       ${detailSection(
-        "??? ???,
+        "상태 변경",
         `<div class="stack form-block">
         <select id="stage">${stageOptions(r.current_stage)}</select>
-        <input id="stage-reason" placeholder="???" />
+        <input id="stage-reason" placeholder="사유" />
         <div class="detail-actions">
-          <button type="button" class="btn btn-primary btn-sm" id="btn-stage">??? ????/button>
-          ${caps().canBlock ? `<button type="button" class="btn btn-danger btn-sm" id="btn-block">??</button>` : ""}
+          <button type="button" class="btn btn-primary btn-sm" id="btn-stage">단계 저장</button>
+          ${caps().canBlock ? `<button type="button" class="btn btn-danger btn-sm" id="btn-block">블락</button>` : ""}
         </div>
       </div>
       <ul class="timeline">
@@ -1514,31 +1514,31 @@ async function renderApplicantDetail(pane) {
           history.length
             ? history
                 .map(
-                  (h) => `<li><b>${esc(stageLabel(h.status_code) !== "?? ? stageLabel(h.status_code) : h.status_code)}</b>
-                    � ${esc(new Date(h.changed_at).toLocaleString("ko-KR"))}
-                    � ${esc(staffNick(h.staff))}
+                  (h) => `<li><b>${esc(stageLabel(h.status_code) !== "—" ? stageLabel(h.status_code) : h.status_code)}</b>
+                    · ${esc(new Date(h.changed_at).toLocaleString("ko-KR"))}
+                    · ${esc(staffNick(h.staff))}
                     ${h.reason ? `<div class="muted">${esc(h.reason)}</div>` : ""}</li>`,
                 )
                 .join("")
-            : `<li class="muted">??? ???</li>`
+            : `<li class="muted">이력 없음</li>`
         }
       </ul>`,
         { icon: Icon.chart({ size: 16 }) },
       )}`
     : detailSection(
-        "??? ???",
-        `<p class="stage-readonly">??? ???: <strong>${esc(stageLabel(r.current_stage))}</strong></p>
+        "상태 이력",
+        `<p class="stage-readonly">현재 단계: <strong>${esc(stageLabel(r.current_stage))}</strong></p>
       <ul class="timeline">
         ${
           history.length
             ? history
                 .map(
-                  (h) => `<li><b>${esc(stageLabel(h.status_code) !== "?? ? stageLabel(h.status_code) : h.status_code)}</b>
-                    � ${esc(new Date(h.changed_at).toLocaleString("ko-KR"))}
-                    � ${esc(staffNick(h.staff))}</li>`,
+                  (h) => `<li><b>${esc(stageLabel(h.status_code) !== "—" ? stageLabel(h.status_code) : h.status_code)}</b>
+                    · ${esc(new Date(h.changed_at).toLocaleString("ko-KR"))}
+                    · ${esc(staffNick(h.staff))}</li>`,
                 )
                 .join("")
-            : `<li class="muted">??? ???</li>`
+            : `<li class="muted">이력 없음</li>`
         }
       </ul>`,
         { icon: Icon.chart({ size: 16 }) },
@@ -1546,8 +1546,8 @@ async function renderApplicantDetail(pane) {
 
   const body = [
     profileHtml,
-    detailSection("??", docsHtml, { icon: Icon.star({ size: 16 }) }),
-    detailSection("?? ???", tagsHtml, { icon: Icon.star({ size: 16 }) }),
+    detailSection("추천", docsHtml, { icon: Icon.star({ size: 16 }) }),
+    detailSection("추천 태그", tagsHtml, { icon: Icon.star({ size: 16 }) }),
     pipelineHtml,
   ].join("");
 
@@ -1566,7 +1566,7 @@ function bindApplicantActions(r, candidateId) {
         comment: "",
         staffId: staff.id,
       });
-      toast(`${staff.nickname || "??} ?? ???`);
+      toast(`${staff.nickname || "나"} 추천 등록`);
       await renderDetail();
     } catch (e) {
       toast(e.message, true);
@@ -1582,7 +1582,7 @@ function bindApplicantActions(r, candidateId) {
         comment: document.getElementById("tag-comment").value,
         staffId: staff.id,
       });
-      toast("??? ?????");
+      toast("태그 저장됨");
       await renderDetail();
     } catch (e) {
       toast(e.message, true);
@@ -1593,7 +1593,7 @@ function bindApplicantActions(r, candidateId) {
     btn.addEventListener("click", async () => {
       try {
         await api.removeTag(sb, btn.getAttribute("data-rm-tag"));
-        toast("??? ?????);
+        toast("태그 제거됨");
         await renderDetail();
       } catch (e) {
         toast(e.message, true);
@@ -1605,7 +1605,7 @@ function bindApplicantActions(r, candidateId) {
 
   document.getElementById("btn-schedule")?.addEventListener("click", async () => {
     const local = document.getElementById("iv-at").value;
-    if (!local) return toast("?? ?????????????, true);
+    if (!local) return toast("면접 일시를 입력하세요", true);
     try {
       await api.scheduleInterview(sb, {
         candidateId,
@@ -1616,7 +1616,7 @@ function bindApplicantActions(r, candidateId) {
         note: document.getElementById("iv-note").value,
         staffId: staff.id,
       });
-      toast("?? ??? ???");
+      toast("면접 일정 등록");
       await refresh(false);
     } catch (e) {
       toast(e.message, true);
@@ -1632,7 +1632,7 @@ function bindApplicantActions(r, candidateId) {
         note: document.getElementById("iv-note")?.value,
         staffId: staff.id,
       });
-      toast("?? ?? ??");
+      toast("면접 결과 반영");
       await refresh(false);
     } catch (e) {
       toast(e.message, true);
@@ -1648,7 +1648,7 @@ function bindApplicantActions(r, candidateId) {
         reason: document.getElementById("stage-reason").value,
         staffId: staff.id,
       });
-      toast("??? ????);
+      toast("단계 저장");
       await refresh(false);
     } catch (e) {
       toast(e.message, true);
@@ -1656,7 +1656,7 @@ function bindApplicantActions(r, candidateId) {
   });
 
   document.getElementById("btn-block")?.addEventListener("click", async () => {
-    if (!confirm("????????? ???????")) return;
+    if (!confirm("이 후보자를 블락할까요?")) return;
     try {
       await api.blockCandidate(sb, {
         candidateId,
@@ -1664,7 +1664,7 @@ function bindApplicantActions(r, candidateId) {
         reason: document.getElementById("stage-reason").value || "blocked via web",
         staffId: staff.id,
       });
-      toast("?? ????);
+      toast("블락 처리됨");
       await refresh(false);
     } catch (e) {
       toast(e.message, true);
@@ -1676,7 +1676,7 @@ async function renderTalentDetail(pane) {
   const r = selected;
   const candidateId = r.candidate?.id;
   const meta = r.profile_meta || {};
-  const name = r.candidate?.name || "(??? ???)";
+  const name = r.candidate?.name || "(이름 없음)";
 
   const [tags, history, docs] = await Promise.all([
     api.listTags(sb, "talent_pool", r.id),
@@ -1688,28 +1688,28 @@ async function renderTalentDetail(pane) {
     platformIcon(r.platform, { large: true }),
     `<span class="stage-pill">${esc(proposalLabel(r.proposal_status))}</span>`,
     isNew(r.sourced_at) ? `<span class="badge new">NEW</span>` : "",
-    !r.is_active ? `<span class="badge blocked">??</span>` : "",
+    !r.is_active ? `<span class="badge blocked">블락</span>` : "",
   ]
     .filter(Boolean)
     .join("");
-  const subBits = [r.headline, meta.genderAge, meta.careerText].filter(Boolean).map(esc).join(" � ");
+  const subBits = [r.headline, meta.genderAge, meta.careerText].filter(Boolean).map(esc).join(" · ");
 
   const profileHtml = [
     detailFacts([
-      ["??? ???", esc(meta.company || "??)],
-      ["??", esc(meta.careerText || "??)],
-      ["?????, esc(fmtDate(r.sourced_at))],
+      ["현재 회사", esc(meta.company || "—")],
+      ["경력", esc(meta.careerText || "—")],
+      ["수집일", esc(fmtDate(r.sourced_at))],
     ]),
     renderChips(meta.roles),
     renderChips(meta.skills),
     renderChips(meta.badges, "badge-chip"),
     detailSection(
-      "???",
+      "서류",
       renderDocuments(docs),
       { icon: Icon.file({ size: 16 }) },
     ),
     detailSection(
-      "?????,
+      "프로필",
       renderProfileLinkRow(r.profile_url, docs),
       { icon: Icon.link({ size: 16 }) },
     ),
@@ -1718,10 +1718,10 @@ async function renderTalentDetail(pane) {
   const docsHtml = `${
     caps().canRecommend
       ? `<div class="detail-actions">
-          <button type="button" class="btn btn-primary" id="btn-recommend">?????</button>
-          <span class="muted detail-hint">?? <b>${esc(staff?.nickname || "")}</b></span>
+          <button type="button" class="btn btn-primary" id="btn-recommend">추천하기</button>
+          <span class="muted detail-hint">별명 <b>${esc(staff?.nickname || "")}</b></span>
         </div>`
-      : `<p class="muted empty-inline">?????�??????? ??? <b>???</b> ?????? ??????????.</p>`
+      : `<p class="muted empty-inline">이력서·첨부파일은 상단 <b>서류</b> 섹션에서 열 수 있습니다.</p>`
   }`;
 
   const tagsHtml = `
@@ -1734,18 +1734,18 @@ async function renderTalentDetail(pane) {
             .map(([v, l]) => `<option value="${v}">${esc(l)}</option>`)
             .join("")}
         </select>
-        <input id="tag-comment" placeholder="???? />
-        <button type="button" class="btn btn-primary btn-sm" id="btn-add-tag">??? ????/button>
+        <input id="tag-comment" placeholder="코멘트" />
+        <button type="button" class="btn btn-primary btn-sm" id="btn-add-tag">태그 저장</button>
       </div>`
         : ""
     }`;
 
   const blockHtml = caps().canBlock
     ? detailSection(
-        "??",
-        `<input id="block-reason" class="block-reason" placeholder="???" />
+        "블락",
+        `<input id="block-reason" class="block-reason" placeholder="사유" />
       <div class="detail-actions">
-        <button type="button" class="btn btn-danger btn-sm" id="btn-block-talent">??? ??</button>
+        <button type="button" class="btn btn-danger btn-sm" id="btn-block-talent">인재 블락</button>
       </div>
       <ul class="timeline">
         ${
@@ -1753,10 +1753,10 @@ async function renderTalentDetail(pane) {
             ? history
                 .map(
                   (h) =>
-                    `<li><b>${esc(h.status_code)}</b> � ${esc(new Date(h.changed_at).toLocaleString("ko-KR"))}</li>`,
+                    `<li><b>${esc(h.status_code)}</b> · ${esc(new Date(h.changed_at).toLocaleString("ko-KR"))}</li>`,
                 )
                 .join("")
-            : `<li class="muted">??? ???</li>`
+            : `<li class="muted">이력 없음</li>`
         }
       </ul>`,
         { icon: Icon.ban({ size: 16 }) },
@@ -1765,8 +1765,8 @@ async function renderTalentDetail(pane) {
 
   const body = [
     profileHtml,
-    detailSection("??", docsHtml, { icon: Icon.star({ size: 16 }) }),
-    detailSection("?? ???", tagsHtml, { icon: Icon.star({ size: 16 }) }),
+    detailSection("추천", docsHtml, { icon: Icon.star({ size: 16 }) }),
+    detailSection("추천 태그", tagsHtml, { icon: Icon.star({ size: 16 }) }),
     blockHtml,
   ].join("");
 
@@ -1781,7 +1781,7 @@ async function renderTalentDetail(pane) {
         comment: "",
         staffId: staff.id,
       });
-      toast(`${staff.nickname || "??} ?? ???`);
+      toast(`${staff.nickname || "나"} 추천 등록`);
       await renderDetail();
     } catch (e) {
       toast(e.message, true);
@@ -1797,7 +1797,7 @@ async function renderTalentDetail(pane) {
         comment: document.getElementById("tag-comment").value,
         staffId: staff.id,
       });
-      toast("??? ?????");
+      toast("태그 저장됨");
       await renderDetail();
     } catch (e) {
       toast(e.message, true);
@@ -1807,7 +1807,7 @@ async function renderTalentDetail(pane) {
     btn.addEventListener("click", async () => {
       try {
         await api.removeTag(sb, btn.getAttribute("data-rm-tag"));
-        toast("??? ?????);
+        toast("태그 제거됨");
         await renderDetail();
       } catch (e) {
         toast(e.message, true);
@@ -1815,7 +1815,7 @@ async function renderTalentDetail(pane) {
     });
   });
   document.getElementById("btn-block-talent")?.addEventListener("click", async () => {
-    if (!confirm("????????????????????")) return;
+    if (!confirm("이 인재검색 후보를 블락할까요?")) return;
     try {
       await api.blockTalent(sb, {
         talentId: r.id,
@@ -1823,7 +1823,7 @@ async function renderTalentDetail(pane) {
         reason: document.getElementById("block-reason").value,
         staffId: staff.id,
       });
-      toast("?? ????);
+      toast("블락 처리됨");
       await refresh(false);
     } catch (e) {
       toast(e.message, true);
@@ -1893,7 +1893,6 @@ async function refresh(resetSelection = true) {
   destroyDashCharts();
 
   if (tab === "postings") {
-    // ????????JK/??????? ????????????????? ??
     rows = await api.listPostings(sb, { q: filterQ, limit: 500 });
   } else if (tab === "applicants") {
     const [apps, postings] = await Promise.all([
@@ -1920,7 +1919,7 @@ async function refresh(resetSelection = true) {
 
   shell(
     listContentHtml(),
-    `<div class="empty detail-empty">????? ??????????????</div>`,
+    `<div class="empty detail-empty">목록에서 항목을 선택하세요.</div>`,
   );
   bindListChrome();
   bindPagination();
