@@ -301,8 +301,12 @@ export async function getDashboardStats(sb) {
 
 export async function listApplications(
   sb,
-  { q = "", platform = "", postingId = "", limit = 10_000 } = {},
+  { q = "", platform = "", postingId = "", limit } = {},
 ) {
+  // 전체 목록은 기본 상한을 크게 — 호출부 limit:500 이 다시 잘리지 않게
+  const maxRows = postingId
+    ? Math.max(Number(limit) || 0, 2_000)
+    : Math.max(Number(limit) || 0, 10_000);
   const select = `
       id, platform, applied_at, created_at, current_stage, is_active, external_ref, profile_meta, posting_id,
       candidate:candidates!inner ( id, name, email, phone, is_active, source_type ),
@@ -319,7 +323,7 @@ export async function listApplications(
       if (postingId) query = query.eq("posting_id", postingId);
       return query;
     },
-    { pageSize: 1000, max: limit },
+    { pageSize: 1000, max: maxRows },
   );
 
   const needle = q.trim().toLowerCase();

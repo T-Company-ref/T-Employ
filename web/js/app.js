@@ -1,6 +1,6 @@
-import { configReady, createClient } from "./client.js";
-import * as api from "./api.js";
-import { Icon } from "./icons.js";
+import { configReady, createClient } from "./client.js?v=20260723b";
+import * as api from "./api.js?v=20260723b";
+import { Icon } from "./icons.js?v=20260723b";
 import {
   stageLabel,
   proposalLabel,
@@ -14,12 +14,12 @@ import {
   POSTING_STATUS_SIDE,
   MEETING_LABELS,
   INTERVIEW_RESULT_LABELS,
-} from "./labels.js";
+} from "./labels.js?v=20260723b";
 import {
   JOB_CATEGORIES,
   resolveTalentCategory,
   categoryShort,
-} from "./categories.js";
+} from "./categories.js?v=20260723b";
 
 const appEl = document.getElementById("app");
 
@@ -1766,7 +1766,6 @@ function bindCardSelection() {
         if (tab === "postings" && selected) {
           selectedPostingApps = await api.listApplications(sb, {
             postingId: selected.id,
-            limit: 500,
           });
         } else {
           selectedPostingApps = [];
@@ -1822,7 +1821,7 @@ async function refresh(resetSelection = true) {
     rows = await api.listPostings(sb, { q: filterQ, platform: filterPlatform, limit: 500 });
   } else if (tab === "applicants") {
     const [apps, postings] = await Promise.all([
-      api.listApplications(sb, { q: filterQ, platform: filterPlatform, limit: 500 }),
+      api.listApplications(sb, { q: filterQ, platform: filterPlatform }),
       api.listPostings(sb, { platform: filterPlatform, limit: 500 }),
     ]);
     rows = apps;
@@ -1838,7 +1837,6 @@ async function refresh(resetSelection = true) {
   if (tab === "postings" && selected) {
     selectedPostingApps = await api.listApplications(sb, {
       postingId: selected.id,
-      limit: 500,
     });
   } else if (tab !== "postings") {
     selectedPostingApps = [];
