@@ -1,6 +1,6 @@
-import { configReady, createClient } from "./client.js?v=20260723e";
-import * as api from "./api.js?v=20260723e";
-import { Icon } from "./icons.js?v=20260723e";
+import { configReady, createClient } from "./client.js?v=20260723f";
+import * as api from "./api.js?v=20260723f";
+import { Icon } from "./icons.js?v=20260723f";
 import {
   stageLabel,
   proposalLabel,
@@ -14,12 +14,12 @@ import {
   POSTING_STATUS_SIDE,
   MEETING_LABELS,
   INTERVIEW_RESULT_LABELS,
-} from "./labels.js?v=20260723e";
+} from "./labels.js?v=20260723f";
 import {
   JOB_CATEGORIES,
   resolveTalentCategory,
   categoryShort,
-} from "./categories.js?v=20260723e";
+} from "./categories.js?v=20260723f";
 
 const appEl = document.getElementById("app");
 
@@ -38,6 +38,9 @@ let filterPostingStatus = "open";
 let filterPlatformSide = "";
 /** 지원자 탭: 특정 공고만 (빈 문자열 = 해당 상태 전체) */
 let filterApplicantPostingId = "";
+/** 사이드 섹션 접힘 */
+let sideFoldPlat = false;
+let sideFoldPost = false;
 /** 지원자 사이드용 공고 캐시 */
 let postingNavRows = [];
 /** 공고 선택 시 하단 지원자 */
@@ -691,58 +694,88 @@ function talentCategoryNav() {
   </nav>`;
 }
 
-function platformSideButtons(status) {
-  const inStatus = (r) =>
-    status === "closed" ? isPostingClosed(r) : !isPostingClosed(r);
+function statusCounts() {
+  if (tab === "applicants") {
+    return {
+      openN: rows.filter((r) => !isPostingClosed(r.posting || {})).length,
+      closedN: rows.filter((r) => isPostingClosed(r.posting || {})).length,
+    };
+  }
+  return {
+    openN: rows.filter((r) => !isPostingClosed(r)).length,
+    closedN: rows.filter((r) => isPostingClosed(r)).length,
+  };
+}
+
+function platformCountsFor(status) {
   const base =
     tab === "applicants"
       ? rows.filter((r) => {
           const closed = isPostingClosed(r.posting || {});
           return status === "closed" ? closed : !closed;
         })
-      : rows.filter(inStatus);
-  const platOf = (r) => (tab === "applicants" ? r.platform || r.posting?.platform : r.platform);
-  const allN = base.length;
-  const jkN = base.filter((r) => platOf(r) === "jobkorea").length;
-  const srN = base.filter((r) => platOf(r) === "saramin").length;
-  const active = filterPostingStatus === status;
-  return `
-    <div class="cat-side-group ${active ? "" : "is-collapsed"}">
-      <div class="cat-side-heading">플랫폼</div>
-      <button type="button" class="cat-side-btn sub ${active && !filterPlatformSide ? "active" : ""}" data-pstatus="${status}" data-platform="">
-        <span class="cat-side-label">전체</span>
-        <span class="cat-side-count">${allN}</span>
-      </button>
-      <button type="button" class="cat-side-btn sub ${active && filterPlatformSide === "jobkorea" ? "active" : ""}" data-pstatus="${status}" data-platform="jobkorea">
-        <span class="cat-side-label">잡코리아</span>
-        <span class="cat-side-count">${jkN}</span>
-      </button>
-      <button type="button" class="cat-side-btn sub ${active && filterPlatformSide === "saramin" ? "active" : ""}" data-pstatus="${status}" data-platform="saramin">
-        <span class="cat-side-label">사람인</span>
-        <span class="cat-side-count">${srN}</span>
-      </button>
-    </div>`;
+      : rows.filter((r) =>
+          status === "closed" ? isPostingClosed(r) : !isPostingClosed(r),
+        );
+  const platOf = (r) =>
+    tab === "applicants" ? r.platform || r.posting?.platform : r.platform;
+  return {
+    jk: base.filter((r) => platOf(r) === "jobkorea").length,
+    sr: base.filter((r) => platOf(r) === "saramin").length,
+  };
 }
 
-function postingStatusNav() {
-  if (tab !== "postings") return "";
-  const openN = rows.filter((r) => !isPostingClosed(r)).length;
-  const closedN = rows.filter((r) => isPostingClosed(r)).length;
-  return `<nav class="cat-side" aria-label="공고 상태">
-    <button type="button" class="cat-side-btn ${filterPostingStatus === "open" ? "active" : ""}" data-pstatus="open">
-      <span class="cat-side-label">${esc(POSTING_STATUS_SIDE.open)}</span>
-      <span class="cat-side-count">${openN}</span>
-    </button>
-    ${platformSideButtons("open")}
-    <button type="button" class="cat-side-btn ${filterPostingStatus === "closed" ? "active" : ""}" data-pstatus="closed">
-      <span class="cat-side-label">${esc(POSTING_STATUS_SIDE.closed)}</span>
-      <span class="cat-side-count">${closedN}</span>
-    </button>
-    ${platformSideButtons("closed")}
-  </nav>`;
+function sideSummaryCard() {
+  const { openN, closedN } = statusCounts();
+  const openActive = filterPostingStatus === "open";
+  return `<div class="side-summary" role="group" aria-label="진행/마감">
+    <div class="side-summary-icon" aria-hidden="true">
+      <span class="side-summary-ring"></span>
+      ${Icon.clipboard({ size: 18, className: "side-summary-clip" })}
+    </div>
+    <div class="side-summary-stats">
+      <button type="button" class="side-summary-stat ${openActive ? "is-active" : ""}" data-pstatus="open" data-platform="">
+        <span class="side-summary-label">${esc(POSTING_STATUS_SIDE.open)}</span>
+        <span class="side-summary-num">${openN}</span>
+      </button>
+      <button type="button" class="side-summary-stat ${!openActive ? "is-active" : ""}" data-pstatus="closed" data-platform="">
+        <span class="side-summary-label">${esc(POSTING_STATUS_SIDE.closed)}</span>
+        <span class="side-summary-num">${closedN}</span>
+      </button>
+    </div>
+  </div>`;
 }
 
-function applicantSideNav() {
+function sidePlatformSection() {
+  const { closedN } = statusCounts();
+  const counts = platformCountsFor(filterPostingStatus === "closed" ? "closed" : "open");
+  const openMode = filterPostingStatus === "open";
+  return `<section class="side-section">
+    <button type="button" class="side-section-head" data-side-fold="plat" aria-expanded="${!sideFoldPlat}">
+      <span class="side-section-title">${Icon.grid({ size: 14 })} 플랫폼</span>
+      <span class="side-chevron ${sideFoldPlat ? "is-collapsed" : ""}">${Icon.chevron({ size: 14 })}</span>
+    </button>
+    <div class="side-section-body ${sideFoldPlat ? "is-collapsed" : ""}">
+      <button type="button" class="side-item ${openMode && filterPlatformSide === "jobkorea" ? "active" : ""}" data-pstatus="open" data-platform="jobkorea">
+        <span class="side-mark side-mark-jk">J</span>
+        <span class="side-item-label">잡코리아</span>
+        <span class="side-badge side-badge-jk">${counts.jk}</span>
+      </button>
+      <button type="button" class="side-item ${openMode && filterPlatformSide === "saramin" ? "active" : ""}" data-pstatus="open" data-platform="saramin">
+        <span class="side-mark side-mark-sr">S</span>
+        <span class="side-item-label">사람인</span>
+        <span class="side-badge ${counts.sr ? "side-badge-sr" : "side-badge-muted"}">${counts.sr}</span>
+      </button>
+      <button type="button" class="side-item ${filterPostingStatus === "closed" ? "active is-closed" : ""}" data-pstatus="closed" data-platform="">
+        <span class="side-mark side-mark-closed">${Icon.flag({ size: 13 })}</span>
+        <span class="side-item-label">마감</span>
+        <span class="side-badge side-badge-closed">${closedN}</span>
+      </button>
+    </div>
+  </section>`;
+}
+
+function sidePostingSection() {
   if (tab !== "applicants") return "";
   const openPostings = postingNavRows.filter((p) => {
     if (isPostingClosed(p)) return false;
@@ -753,9 +786,6 @@ function applicantSideNav() {
     return !filterPlatformSide || p.platform === filterPlatformSide;
   });
   const statusPostings = filterPostingStatus === "closed" ? closedPostings : openPostings;
-  const openAppN = rows.filter((r) => !isPostingClosed(r.posting || {})).length;
-  const closedAppN = rows.filter((r) => isPostingClosed(r.posting || {})).length;
-
   const visibleForStatus = rows.filter((r) => {
     const closed = isPostingClosed(r.posting || {});
     const statusOk = filterPostingStatus === "closed" ? closed : !closed;
@@ -764,35 +794,46 @@ function applicantSideNav() {
     return statusOk && platformOk;
   });
 
-  return `<nav class="cat-side" aria-label="지원자 공고 필터">
-    <button type="button" class="cat-side-btn ${filterPostingStatus === "open" ? "active" : ""}" data-pstatus="open">
-      <span class="cat-side-label">${esc(POSTING_STATUS_SIDE.open)}</span>
-      <span class="cat-side-count">${openAppN}</span>
+  return `<section class="side-section">
+    <button type="button" class="side-section-head" data-side-fold="post" aria-expanded="${!sideFoldPost}">
+      <span class="side-section-title">${Icon.folder({ size: 14 })} 공고별</span>
+      <span class="side-chevron ${sideFoldPost ? "is-collapsed" : ""}">${Icon.chevron({ size: 14 })}</span>
     </button>
-    ${platformSideButtons("open")}
-    <button type="button" class="cat-side-btn ${filterPostingStatus === "closed" ? "active" : ""}" data-pstatus="closed">
-      <span class="cat-side-label">${esc(POSTING_STATUS_SIDE.closed)}</span>
-      <span class="cat-side-count">${closedAppN}</span>
-    </button>
-    ${platformSideButtons("closed")}
-    <div class="cat-side-group">
-      <div class="cat-side-heading">공고별</div>
-      <button type="button" class="cat-side-btn sub ${!filterApplicantPostingId ? "active" : ""}" data-app-posting="">
-        <span class="cat-side-label">전체</span>
-        <span class="cat-side-count">${visibleForStatus.length}</span>
+    <div class="side-section-body ${sideFoldPost ? "is-collapsed" : ""}">
+      <button type="button" class="side-item ${!filterApplicantPostingId ? "active" : ""}" data-app-posting="">
+        <span class="side-mark side-mark-all">${Icon.list({ size: 13 })}</span>
+        <span class="side-item-label">전체</span>
+        <span class="side-badge side-badge-active">${visibleForStatus.length}</span>
       </button>
       ${statusPostings
         .map((p) => {
           const n = rows.filter((r) => (r.posting?.id || r.posting_id) === p.id).length;
-          return `<button type="button" class="cat-side-btn sub ${
-            filterApplicantPostingId === p.id ? "active" : ""
-          }" data-app-posting="${esc(p.id)}" title="${esc(p.title || "")}">
-            <span class="cat-side-label">${esc(p.title || "(제목 없음)")}</span>
-            <span class="cat-side-count">${n}</span>
+          const active = filterApplicantPostingId === p.id;
+          return `<button type="button" class="side-item ${active ? "active" : ""}" data-app-posting="${esc(p.id)}" title="${esc(p.title || "")}">
+            <span class="side-mark side-mark-doc">${Icon.file({ size: 13 })}</span>
+            <span class="side-item-label">${esc(p.title || "(제목 없음)")}</span>
+            <span class="side-badge ${active ? "side-badge-active" : "side-badge-muted"}">${n}</span>
           </button>`;
         })
         .join("")}
     </div>
+  </section>`;
+}
+
+function postingStatusNav() {
+  if (tab !== "postings") return "";
+  return `<nav class="cat-side side-nav" aria-label="공고 필터">
+    ${sideSummaryCard()}
+    ${sidePlatformSection()}
+  </nav>`;
+}
+
+function applicantSideNav() {
+  if (tab !== "applicants") return "";
+  return `<nav class="cat-side side-nav" aria-label="지원자 필터">
+    ${sideSummaryCard()}
+    ${sidePlatformSection()}
+    ${sidePostingSection()}
   </nav>`;
 }
 
@@ -881,18 +922,36 @@ function bindTalentCategoryNav() {
 }
 
 function bindPostingStatusNav() {
+  document.querySelectorAll("[data-side-fold]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const which = btn.getAttribute("data-side-fold");
+      if (which === "plat") sideFoldPlat = !sideFoldPlat;
+      if (which === "post") sideFoldPost = !sideFoldPost;
+      paintListPane();
+    });
+  });
   document.querySelectorAll("[data-pstatus]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const next = btn.getAttribute("data-pstatus") || "open";
       const platformAttr = btn.getAttribute("data-platform");
       const isPlatformBtn = platformAttr !== null;
-      const nextPlatform = isPlatformBtn ? platformAttr : filterPlatformSide;
+      const nextPlatform = isPlatformBtn ? platformAttr : "";
 
       if (next === filterPostingStatus && (!isPlatformBtn || nextPlatform === filterPlatformSide)) {
+        // 진행중 요약 재클릭 시 플랫폼 전체로
+        if (!isPlatformBtn && filterPlatformSide) {
+          filterPlatformSide = "";
+          filterApplicantPostingId = "";
+          listPage = 1;
+          selected = null;
+          selectedPostingApps = [];
+          paintListPane();
+          await renderDetail();
+        }
         return;
       }
       filterPostingStatus = next;
-      if (isPlatformBtn) filterPlatformSide = nextPlatform;
+      filterPlatformSide = isPlatformBtn ? nextPlatform : "";
       filterApplicantPostingId = "";
       listPage = 1;
       selected = null;
