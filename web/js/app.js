@@ -1,6 +1,6 @@
-import { configReady, createClient } from "./client.js?v=20260723h";
-import * as api from "./api.js?v=20260723h";
-import { Icon } from "./icons.js?v=20260723h";
+import { configReady, createClient } from "./client.js?v=20260723i";
+import * as api from "./api.js?v=20260723i";
+import { Icon } from "./icons.js?v=20260723i";
 import {
   stageLabel,
   proposalLabel,
@@ -14,12 +14,12 @@ import {
   POSTING_STATUS_SIDE,
   MEETING_LABELS,
   INTERVIEW_RESULT_LABELS,
-} from "./labels.js?v=20260723h";
+} from "./labels.js?v=20260723i";
 import {
   JOB_CATEGORIES,
   resolveTalentCategory,
   categoryShort,
-} from "./categories.js?v=20260723h";
+} from "./categories.js?v=20260723i";
 
 const appEl = document.getElementById("app");
 
@@ -1251,7 +1251,13 @@ function renderApplicantsCards() {
         !r.is_active || !r.candidate?.is_active ? `<span class="badge blocked">블락</span>` : "",
       ].join(" ");
       const subParts = [meta.genderAge, meta.careerTotal].filter(Boolean);
-      const edu = [meta.educationLevel, meta.educationSchool, meta.educationMajor].filter(Boolean).join(" · ");
+      const edu =
+        [meta.educationLevel, meta.educationSchool, meta.educationMajor].filter(Boolean).join(" · ") ||
+        meta.education ||
+        "";
+      // JK: 태그·경력칩 축소 / 사람인: 동일 슬롯에 학력·희망연봉·직군 표시
+      const tags = (meta.recommendTags || []).slice(0, 2);
+      const careers = (meta.careerHistory || []).slice(0, 1);
 
       return `<article class="candidate-card ${sel}" data-id="${esc(r.id)}">
         <div class="card-top">
@@ -1262,6 +1268,7 @@ function renderApplicantsCards() {
               ${badges}
             </div>
             ${subParts.length ? `<div class="card-sub">${esc(subParts.join(" · "))}</div>` : ""}
+            ${edu ? `<div class="card-sub">${esc(edu)}</div>` : ""}
           </div>
           <div class="card-top-side">
             ${meta.desiredSalary ? `<span class="card-salary">${esc(meta.desiredSalary)}</span>` : ""}
@@ -1270,10 +1277,10 @@ function renderApplicantsCards() {
         </div>
         <div class="card-meta-row">
           <span class="meta-pill platform" title="${esc(platformLabel(r.platform))}">${platformIcon(r.platform)}</span>
+          ${meta.platformStatus ? `<span class="meta-pill">${esc(meta.platformStatus)}</span>` : ""}
         </div>
-        ${renderChips(meta.recommendTags, "badge-chip")}
-        ${edu ? `<div class="card-sub">${esc(edu)}</div>` : ""}
-        ${renderChips(meta.careerHistory?.slice(0, 3))}
+        ${renderChips(tags, "badge-chip")}
+        ${renderChips(careers)}
         <div class="card-footer">
           <span class="card-posting">${esc(posting)}${esc(postingNo)}</span>
         </div>
