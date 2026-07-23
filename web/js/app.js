@@ -1,6 +1,6 @@
-import { configReady, createClient } from "./client.js?v=20260723g";
-import * as api from "./api.js?v=20260723g";
-import { Icon } from "./icons.js?v=20260723g";
+import { configReady, createClient } from "./client.js?v=20260723h";
+import * as api from "./api.js?v=20260723h";
+import { Icon } from "./icons.js?v=20260723h";
 import {
   stageLabel,
   proposalLabel,
@@ -14,12 +14,12 @@ import {
   POSTING_STATUS_SIDE,
   MEETING_LABELS,
   INTERVIEW_RESULT_LABELS,
-} from "./labels.js?v=20260723g";
+} from "./labels.js?v=20260723h";
 import {
   JOB_CATEGORIES,
   resolveTalentCategory,
   categoryShort,
-} from "./categories.js?v=20260723g";
+} from "./categories.js?v=20260723h";
 
 const appEl = document.getElementById("app");
 
@@ -1249,7 +1249,6 @@ function renderApplicantsCards() {
       const badges = [
         isNew(r.created_at || r.applied_at) ? `<span class="badge new">NEW</span>` : "",
         !r.is_active || !r.candidate?.is_active ? `<span class="badge blocked">블락</span>` : "",
-        meta.platformStatus ? `<span class="badge">${esc(meta.platformStatus)}</span>` : "",
       ].join(" ");
       const subParts = [meta.genderAge, meta.careerTotal].filter(Boolean);
       const edu = [meta.educationLevel, meta.educationSchool, meta.educationMajor].filter(Boolean).join(" · ");
