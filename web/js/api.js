@@ -131,6 +131,20 @@ export async function listPostings(sb, { q = "", platform = "", limit = 500 } = 
   }
 
   const needle = q.trim().toLowerCase();
+  const postingEndMs = (row) => {
+    const end = row.meta?.periodEnd;
+    if (end) {
+      const t = new Date(`${end}T12:00:00+09:00`).getTime();
+      if (!Number.isNaN(t)) return t;
+    }
+    const period = String(row.meta?.period || "");
+    const matches = [...period.matchAll(/(\d{4})\.(\d{2})\.(\d{2})/g)];
+    const last = matches[matches.length - 1];
+    if (!last) return 0;
+    const t = new Date(`${last[1]}-${last[2]}-${last[3]}T12:00:00+09:00`).getTime();
+    return Number.isNaN(t) ? 0 : t;
+  };
+
   return rows
     .map((r) => ({ ...r, applicant_count: counts[r.id] || 0 }))
     .filter((row) => {
@@ -140,7 +154,8 @@ export async function listPostings(sb, { q = "", platform = "", limit = 500 } = 
         .join(" ")
         .toLowerCase();
       return hay.includes(needle);
-    });
+    })
+    .sort((a, b) => postingEndMs(b) - postingEndMs(a) || String(b.updated_at).localeCompare(String(a.updated_at)));
 }
 
 function dayKey(iso) {

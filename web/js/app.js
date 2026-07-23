@@ -45,12 +45,29 @@ const PAGE_SIZE = 10;
 let toastTimer = null;
 let dashboardStats = null;
 
+function postingPeriodEndMs(p) {
+  const end = p?.meta?.periodEnd;
+  if (end) {
+    const t = new Date(`${end}T23:59:59+09:00`).getTime();
+    if (!Number.isNaN(t)) return t;
+  }
+  const period = String(p?.meta?.period || "");
+  const matches = [...period.matchAll(/(\d{4})\.(\d{2})\.(\d{2})/g)];
+  const last = matches[matches.length - 1];
+  if (!last) return null;
+  const t = new Date(`${last[1]}-${last[2]}-${last[3]}T23:59:59+09:00`).getTime();
+  return Number.isNaN(t) ? null : t;
+}
+
 function isPostingClosed(p) {
   if (!p) return false;
   if (p.closed_at) return true;
   if (String(p.meta?.pubType || "") === "2") return true;
   const s = String(p.meta?.status || "");
-  return /마감|종료|closed|완료|접수마감/i.test(s);
+  if (/마감|종료|closed|완료|접수마감/i.test(s)) return true;
+  const endMs = postingPeriodEndMs(p);
+  if (endMs != null && endMs < Date.now()) return true;
+  return false;
 }
 
 function fmtResumeLastModified(iso) {
@@ -713,19 +730,16 @@ function applicantSideNav() {
   </nav>`;
 }
 
-function renderPostingApplicantsBelow() {
-  if (tab !== "postings" || !selected) return "";
-  const title = selected.title || "(제목 없음)";
+function renderPostingApplicantsInDetail() {
   if (!selectedPostingApps.length) {
     return `<div class="posting-apps-panel">
-      <h3>지원자 · ${esc(title)} <span class="muted">0명</span></h3>
+      <h3 class="section-title">이 공고 지원자 <span class="muted">0명</span></h3>
       <div class="empty">이 공고에 수집된 지원자가 없습니다.</div>
     </div>`;
   }
   return `<div class="posting-apps-panel">
-    <h3>지원자 · ${esc(title)} <span class="muted">${selectedPostingApps.length}명</span></h3>
-    <div class="card-list">${selectedPostingApps
-      .slice(0, 50)
+    <h3 class="section-title">이 공고 지원자 <span class="muted">${selectedPostingApps.length}명</span></h3>
+    <div class="card-list detail-app-list">${selectedPostingApps
       .map((r) => {
         const meta = r.profile_meta || {};
         const name = r.candidate?.name || "(이름 없음)";
@@ -745,7 +759,7 @@ function renderPostingApplicantsBelow() {
 }
 
 function listContentHtml() {
-  const body = `${listToolbar(listTabTitle())}${listCardsHtml()}${renderPagination()}${renderPostingApplicantsBelow()}`;
+  const body = `${listToolbar(listTabTitle())}${listCardsHtml()}${renderPagination()}`;
   if (tab === "talent") {
     return `<div class="talent-layout">${talentCategoryNav()}<div class="talent-main">${body}</div></div>`;
   }
@@ -768,7 +782,6 @@ function paintListPane() {
   bindTalentCategoryNav();
   bindPostingStatusNav();
   bindApplicantSideNav();
-  bindPostingAppsBelow();
   if (selected?.id) {
     document.querySelector(`.candidate-card[data-id="${selected.id}"]`)?.classList.add("selected");
   }
@@ -823,9 +836,10 @@ function bindPostingAppsBelow() {
     card.addEventListener("click", async (e) => {
       e.stopPropagation();
       const id = card.getAttribute("data-goto-app");
+      const posting = selected;
       tab = "applicants";
-      filterPostingStatus = "open";
-      filterApplicantPostingId = selected?.id || "";
+      filterPostingStatus = posting && isPostingClosed(posting) ? "closed" : "open";
+      filterApplicantPostingId = posting?.id || "";
       filterQ = "";
       await refresh(true);
       selected = rows.find((r) => r.id === id) || null;
@@ -1201,6 +1215,9 @@ async function renderDetail() {
 async function renderPostingDetail(pane) {
   const r = selected;
   const meta = r.meta || {};
+  const liveTotal = meta.applicantCounts
+    ? Object.entries(meta.applicantCounts).find(([k]) => k.includes("전체"))?.[1]
+    : null;
   const body = `
     ${detailSection(
       "공고 정보",
@@ -1209,7 +1226,12 @@ async function renderPostingDetail(pane) {
         ["상태", esc(meta.status || (isPostingClosed(r) ? "마감" : "진행 중"))],
         ["담당자", esc(meta.manager || "—")],
         ["기간", esc(meta.period || "—")],
-        ["지원자", `${selectedPostingApps.length || r.applicant_count || 0}명`],
+        [
+          "지원자",
+          `${selectedPostingApps.length || r.applicant_count || 0}명 수집${
+            liveTotal != null ? ` · 잡코리아 전체 ${liveTotal}명` : ""
+          }`,
+        ],
         [
           "원본 링크",
           r.source_url
@@ -1219,10 +1241,10 @@ async function renderPostingDetail(pane) {
       ]),
       { icon: Icon.clipboard({ size: 16 }) },
     )}
-    <p class="muted">목록 하단에서 이 공고 지원자를 바로 확인할 수 있습니다.</p>
     <div class="detail-actions">
       <button type="button" class="btn btn-primary btn-sm" id="btn-view-apps">지원자 탭에서 보기</button>
-    </div>`;
+    </div>
+    ${renderPostingApplicantsInDetail()}`;
 
   pane.innerHTML = wrapDetail(r.title || "(제목 없음)", "", body, {
     badges: `${platformIcon(r.platform, { large: true })}`,
@@ -1236,6 +1258,7 @@ async function renderPostingDetail(pane) {
     selected = null;
     await refresh();
   });
+  bindPostingAppsBelow();
 }
 
 async function renderApplicantDetail(pane) {
@@ -1732,12 +1755,8 @@ function bindCardSelection() {
         if (tab === "postings" && selected) {
           selectedPostingApps = await api.listApplications(sb, {
             postingId: selected.id,
-            limit: 200,
+            limit: 500,
           });
-          paintListPane();
-          document
-            .querySelector(`.candidate-card[data-id="${selected.id}"]`)
-            ?.classList.add("selected");
         } else {
           selectedPostingApps = [];
         }
@@ -1808,7 +1827,7 @@ async function refresh(resetSelection = true) {
   if (tab === "postings" && selected) {
     selectedPostingApps = await api.listApplications(sb, {
       postingId: selected.id,
-      limit: 200,
+      limit: 500,
     });
   } else if (tab !== "postings") {
     selectedPostingApps = [];
@@ -1824,7 +1843,6 @@ async function refresh(resetSelection = true) {
   bindTalentCategoryNav();
   bindPostingStatusNav();
   bindApplicantSideNav();
-  bindPostingAppsBelow();
 
   if (selected) {
     try {

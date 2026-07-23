@@ -345,12 +345,21 @@ a:hover { text-decoration: underline; }
   padding-top: 14px;
   border-top: 1px solid var(--line);
 }
-.posting-apps-panel h3 {
+.posting-apps-panel h3,
+.posting-apps-panel .section-title {
   margin: 0 0 10px;
   font-size: 15px;
   display: flex;
   align-items: baseline;
   gap: 8px;
+}
+.detail-app-list {
+  max-height: min(55vh, 520px);
+  overflow: auto;
+  padding-right: 2px;
+}
+.detail-app-list .candidate-card {
+  cursor: pointer;
 }
 .dash-links {
   display: flex;
