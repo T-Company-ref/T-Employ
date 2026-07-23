@@ -48,8 +48,9 @@ let dashboardStats = null;
 function isPostingClosed(p) {
   if (!p) return false;
   if (p.closed_at) return true;
+  if (String(p.meta?.pubType || "") === "2") return true;
   const s = String(p.meta?.status || "");
-  return /마감|종료|closed|완료/i.test(s);
+  return /마감|종료|closed|완료|접수마감/i.test(s);
 }
 
 function fmtResumeLastModified(iso) {
