@@ -404,6 +404,9 @@ a:hover { text-decoration: underline; }
   max-height: min(52vh, 420px);
   overflow: auto;
 }
+.cat-side-group.is-collapsed {
+  display: none;
+}
 .cat-side-heading {
   font-size: 11px;
   font-weight: 700;
