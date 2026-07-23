@@ -731,14 +731,25 @@ function applicantSideNav() {
 }
 
 function renderPostingApplicantsInDetail() {
+  const blocked = selected?.meta?.applicantAccessBlocked;
+  const liveTotal = selected?.meta?.applicantCounts
+    ? Object.entries(selected.meta.applicantCounts).find(([k]) => k.includes("전체"))?.[1]
+    : null;
   if (!selectedPostingApps.length) {
+    const emptyMsg = blocked
+      ? `잡코리아 정책상 최근 90일 이내 공고만 지원자 상세를 열 수 있습니다.${
+          liveTotal != null ? ` 목록상 전체 ${liveTotal}명은 표시되나 상세 수집은 불가합니다.` : ""
+        }`
+      : "이 공고에 수집된 지원자가 없습니다.";
     return `<div class="posting-apps-panel">
       <h3 class="section-title">이 공고 지원자 <span class="muted">0명</span></h3>
-      <div class="empty">이 공고에 수집된 지원자가 없습니다.</div>
+      <div class="empty">${esc(emptyMsg)}</div>
     </div>`;
   }
   return `<div class="posting-apps-panel">
-    <h3 class="section-title">이 공고 지원자 <span class="muted">${selectedPostingApps.length}명</span></h3>
+    <h3 class="section-title">이 공고 지원자 <span class="muted">${selectedPostingApps.length}명${
+      liveTotal != null ? ` / 전체 ${liveTotal}` : ""
+    }</span></h3>
     <div class="card-list detail-app-list">${selectedPostingApps
       .map((r) => {
         const meta = r.profile_meta || {};

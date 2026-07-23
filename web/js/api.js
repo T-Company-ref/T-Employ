@@ -1,5 +1,19 @@
 /** @typedef {import('@supabase/supabase-js').SupabaseClient} SupabaseClient */
 
+/** Supabase/PostgREST 기본 max-rows 를 넘는 목록을 range 로 전량 수집 */
+async function fetchAllRows(buildQuery, { pageSize = 1000, max = 10_000 } = {}) {
+  const all = [];
+  for (let from = 0; from < max; from += pageSize) {
+    const to = Math.min(from + pageSize - 1, max - 1);
+    const { data, error } = await buildQuery().range(from, to);
+    if (error) throw error;
+    const batch = data ?? [];
+    all.push(...batch);
+    if (batch.length < pageSize) break;
+  }
+  return all;
+}
+
 export async function getSession(sb) {
   const { data, error } = await sb.auth.getSession();
   if (error) throw error;
@@ -119,12 +133,11 @@ export async function listPostings(sb, { q = "", platform = "", limit = 500 } = 
   const ids = rows.map((r) => r.id);
   let counts = {};
   if (ids.length) {
-    const { data: apps, error: appErr } = await sb
-      .from("applications")
-      .select("posting_id")
-      .in("posting_id", ids);
-    if (appErr) throw appErr;
-    for (const a of apps ?? []) {
+    const apps = await fetchAllRows(
+      () => sb.from("applications").select("posting_id").in("posting_id", ids),
+      { pageSize: 1000, max: 20_000 },
+    );
+    for (const a of apps) {
       if (!a.posting_id) continue;
       counts[a.posting_id] = (counts[a.posting_id] || 0) + 1;
     }
@@ -288,28 +301,30 @@ export async function getDashboardStats(sb) {
 
 export async function listApplications(
   sb,
-  { q = "", platform = "", postingId = "", limit = 500 } = {},
+  { q = "", platform = "", postingId = "", limit = 10_000 } = {},
 ) {
-  let query = sb
-    .from("applications")
-    .select(
-      `
+  const select = `
       id, platform, applied_at, created_at, current_stage, is_active, external_ref, profile_meta, posting_id,
       candidate:candidates!inner ( id, name, email, phone, is_active, source_type ),
       posting:job_postings ( id, title, external_posting_id, source_url, meta, closed_at )
-    `,
-    )
-    .order("created_at", { ascending: false })
-    .limit(limit);
+    `;
 
-  if (platform) query = query.eq("platform", platform);
-  if (postingId) query = query.eq("posting_id", postingId);
-  const { data, error } = await query;
-  if (error) throw error;
+  const data = await fetchAllRows(
+    () => {
+      let query = sb
+        .from("applications")
+        .select(select)
+        .order("created_at", { ascending: false });
+      if (platform) query = query.eq("platform", platform);
+      if (postingId) query = query.eq("posting_id", postingId);
+      return query;
+    },
+    { pageSize: 1000, max: limit },
+  );
 
   const needle = q.trim().toLowerCase();
-  if (!needle) return data ?? [];
-  return (data ?? []).filter((row) => {
+  if (!needle) return data;
+  return data.filter((row) => {
     const hay = [
       row.candidate?.name,
       row.candidate?.email,
