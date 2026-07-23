@@ -1,6 +1,6 @@
-import { configReady, createClient } from "./client.js?v=20260723b";
-import * as api from "./api.js?v=20260723b";
-import { Icon } from "./icons.js?v=20260723b";
+import { configReady, createClient } from "./client.js?v=20260723c";
+import * as api from "./api.js?v=20260723c";
+import { Icon } from "./icons.js?v=20260723c";
 import {
   stageLabel,
   proposalLabel,
@@ -14,12 +14,12 @@ import {
   POSTING_STATUS_SIDE,
   MEETING_LABELS,
   INTERVIEW_RESULT_LABELS,
-} from "./labels.js?v=20260723b";
+} from "./labels.js?v=20260723c";
 import {
   JOB_CATEGORIES,
   resolveTalentCategory,
   categoryShort,
-} from "./categories.js?v=20260723b";
+} from "./categories.js?v=20260723c";
 
 const appEl = document.getElementById("app");
 
@@ -477,32 +477,40 @@ async function openProfileSettings() {
           <button type="button" class="detail-close" id="pf-cancel" aria-label="닫기">${Icon.close({ size: 18 })}</button>
         </div>
         <div class="stack">
-          <label>표시 이름</label>
-          <input id="pf-display" value="${esc(staff.display_name || "")}" placeholder="예: 주호정" />
-          <label>별명 (추천 태그에 표시)</label>
-          <input id="pf-nick" value="${esc(staff.nickname || "")}" placeholder="예: hj.joo" />
-          <label>메일 알림</label>
-          <div class="notify-checks">
-            <label><input type="checkbox" id="pf-rt" ${rt ? "checked" : ""} /> 실시간 알림</label>
-            <label><input type="checkbox" id="pf-dg" ${dg ? "checked" : ""} /> 모닝 다이제스트 (07:30)</label>
+          <div class="pf-field">
+            <label for="pf-display">표시 이름</label>
+            <input id="pf-display" value="${esc(staff.display_name || "")}" placeholder="예: 주호정" />
           </div>
-          <label>알림 받을 공고 (진행 중 · 관심)</label>
-          <p class="muted" style="margin:0">선택하지 않으면 진행 중 공고 전체에 대해 알림을 받습니다. 둘 다 끄면 메일 미수신.</p>
-          <div class="interest-list" id="pf-interest">
-            ${
-              openPostings.length
-                ? openPostings
-                    .map(
-                      (p) => `<label>
-                        <input type="checkbox" data-pid="${esc(p.id)}" ${interested.has(p.id) ? "checked" : ""} />
-                        <span>${esc(p.title || "(제목 없음)")}
-                          <span class="muted"> · ${esc(platformLabel(p.platform))}</span>
-                        </span>
-                      </label>`,
-                    )
-                    .join("")
-                : `<p class="muted">진행 중 공고가 없습니다.</p>`
-            }
+          <div class="pf-field">
+            <label for="pf-nick">별명 (추천 태그에 표시)</label>
+            <input id="pf-nick" value="${esc(staff.nickname || "")}" placeholder="예: yj.kim" />
+          </div>
+          <div class="pf-field">
+            <label>메일 알림</label>
+            <div class="notify-checks">
+              <label><input type="checkbox" id="pf-rt" ${rt ? "checked" : ""} /> 실시간 알림</label>
+              <label><input type="checkbox" id="pf-dg" ${dg ? "checked" : ""} /> 모닝 다이제스트 (07:30)</label>
+            </div>
+          </div>
+          <div class="pf-field">
+            <label>알림 받을 공고 (진행 중 · 관심)</label>
+            <p class="pf-hint">선택하지 않으면 진행 중 공고 전체에 대해 알림을 받습니다. 둘 다 끄면 메일 미수신.</p>
+            <div class="interest-list" id="pf-interest">
+              ${
+                openPostings.length
+                  ? openPostings
+                      .map(
+                        (p) => `<label>
+                          <input type="checkbox" data-pid="${esc(p.id)}" ${interested.has(p.id) ? "checked" : ""} />
+                          <span>${esc(p.title || "(제목 없음)")}
+                            <span class="muted"> · ${esc(platformLabel(p.platform))}</span>
+                          </span>
+                        </label>`,
+                      )
+                      .join("")
+                  : `<p class="muted">진행 중 공고가 없습니다.</p>`
+              }
+            </div>
           </div>
         </div>
         <div class="actions" style="margin-top:16px">

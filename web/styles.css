@@ -222,7 +222,7 @@ a:hover { text-decoration: underline; }
   padding: 20px;
 }
 .modal-card {
-  width: min(420px, 100%);
+  width: min(480px, 100%);
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 14px;
@@ -230,8 +230,14 @@ a:hover { text-decoration: underline; }
   box-shadow: 0 18px 50px rgba(15, 23, 42, 0.18);
 }
 .modal-card h3 { margin: 0 0 4px; font-size: 1.1rem; }
-.modal-card .stack label { font-size: 0.82rem; color: var(--muted); margin-top: 8px; }
-.modal-card input,
+.modal-card .stack > label,
+.modal-card .pf-field > label {
+  font-size: 0.82rem;
+  color: var(--muted);
+  font-weight: 600;
+  margin: 0;
+}
+.modal-card input:not([type="checkbox"]):not([type="radio"]),
 .modal-card select {
   width: 100%;
   background: var(--surface-2);
@@ -239,6 +245,81 @@ a:hover { text-decoration: underline; }
   border-radius: 10px;
   padding: 10px 12px;
   color: var(--text);
+}
+.modal-card input[type="checkbox"],
+.modal-card input[type="radio"] {
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  margin: 0;
+  padding: 0;
+  flex-shrink: 0;
+  accent-color: var(--brand);
+  cursor: pointer;
+}
+.pf-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pf-hint {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+.notify-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #f8fafc;
+}
+.notify-checks label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 !important;
+  font-size: 0.9rem !important;
+  font-weight: 500 !important;
+  color: var(--text) !important;
+  cursor: pointer;
+  width: 100%;
+}
+.interest-list {
+  max-height: 240px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: #f8fafc;
+}
+.interest-list label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 !important;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 0.86rem !important;
+  font-weight: 500 !important;
+  color: var(--text) !important;
+  cursor: pointer;
+  width: 100%;
+}
+.interest-list label:hover {
+  background: #fff;
+}
+.interest-list label span {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.4;
 }
 .main {
   display: grid;
@@ -383,38 +464,6 @@ a:hover { text-decoration: underline; }
 .dash-link:hover {
   border-color: #94a3b8;
   background: #f8fafc;
-}
-.notify-checks {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 4px 0 8px;
-}
-.notify-checks label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 500;
-  cursor: pointer;
-}
-.interest-list {
-  max-height: 220px;
-  overflow: auto;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 8px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  background: #f8fafc;
-}
-.interest-list label {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
 }
 .cat-side-btn {
   display: flex;
@@ -1245,12 +1294,23 @@ a.pdf-open-btn:active {
 .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .stack { display: grid; gap: 10px; }
 .stack label { font-size: 0.8rem; color: var(--muted); }
-.stack input, .stack select, .stack textarea {
+.stack input:not([type="checkbox"]):not([type="radio"]),
+.stack select,
+.stack textarea {
   width: 100%;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 10px 12px;
+}
+.stack input[type="checkbox"],
+.stack input[type="radio"] {
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  margin: 0;
+  padding: 0;
+  flex-shrink: 0;
 }
 .stack textarea { min-height: 72px; resize: vertical; }
 
