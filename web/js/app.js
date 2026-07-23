@@ -1,6 +1,6 @@
-import { configReady, createClient } from "./client.js?v=20260723f";
-import * as api from "./api.js?v=20260723f";
-import { Icon } from "./icons.js?v=20260723f";
+import { configReady, createClient } from "./client.js?v=20260723g";
+import * as api from "./api.js?v=20260723g";
+import { Icon } from "./icons.js?v=20260723g";
 import {
   stageLabel,
   proposalLabel,
@@ -14,12 +14,12 @@ import {
   POSTING_STATUS_SIDE,
   MEETING_LABELS,
   INTERVIEW_RESULT_LABELS,
-} from "./labels.js?v=20260723f";
+} from "./labels.js?v=20260723g";
 import {
   JOB_CATEGORIES,
   resolveTalentCategory,
   categoryShort,
-} from "./categories.js?v=20260723f";
+} from "./categories.js?v=20260723g";
 
 const appEl = document.getElementById("app");
 
@@ -213,7 +213,7 @@ function renderDocuments(docs) {
   return `<div class="doc-panel">${resumeBlock}${attBlock}</div>`;
 }
 
-function renderProfileLinkRow(profileUrl, docs, { label = "잡코리아 프로필", listMode = false } = {}) {
+function renderProfileLinkRow(profileUrl, docs, { label = "원본 프로필", listMode = false } = {}) {
   const profileLink = profileUrl
     ? `<a class="profile-origin-link" href="${esc(profileUrl)}" target="_blank" rel="noopener">${esc(label)} ${Icon.external({ size: 14, className: "inline-icon" })}</a>`
     : `<span class="muted">${listMode ? "공고 지원자 목록 링크 없음" : "프로필 링크 없음"}</span>`;
@@ -222,10 +222,14 @@ function renderProfileLinkRow(profileUrl, docs, { label = "잡코리아 프로�
 
 function applicantListUrl(r) {
   const gi = r?.posting?.external_posting_id;
-  if (r?.platform === "jobkorea" && gi) {
+  const plat = r?.platform || r?.posting?.platform;
+  if (plat === "jobkorea" && gi) {
     return `https://www.jobkorea.co.kr/Corp/Applicant/list?GI_No=${encodeURIComponent(gi)}&PageCode=YA`;
   }
-  return r?.posting?.meta?.applicantListUrl || null;
+  if (plat === "saramin" && gi) {
+    return `https://hiring.saramin.co.kr/applicant-manage/recruit/${encodeURIComponent(gi)}`;
+  }
+  return r?.posting?.meta?.applicantListUrl || r?.profile_meta?.applicantListUrl || null;
 }
 
 function renderConfigMissing() {
@@ -844,7 +848,7 @@ function renderPostingApplicantsInDetail() {
     : null;
   if (!selectedPostingApps.length) {
     const emptyMsg = blocked
-      ? `잡코리아 정책상 최근 90일 이내 공고만 지원자 상세를 열 수 있습니다.${
+      ? `${platformLabel(selected?.platform || "jobkorea")} 정책상 최근 90일 이내 공고만 지원자 상세를 열 수 있습니다.${
           liveTotal != null ? ` 목록상 전체 ${liveTotal}명은 표시되나 상세 수집은 불가합니다.` : ""
         }`
       : "이 공고에 수집된 지원자가 없습니다.";
@@ -1374,7 +1378,7 @@ async function renderPostingDetail(pane) {
         [
           "지원자",
           `${selectedPostingApps.length || r.applicant_count || 0}명 수집${
-            liveTotal != null ? ` · 잡코리아 전체 ${liveTotal}명` : ""
+            liveTotal != null ? ` · ${platformLabel(r.platform)} 전체 ${liveTotal}명` : ""
           }`,
         ],
         [
@@ -1464,7 +1468,7 @@ async function renderApplicantDetail(pane) {
     ),
     detailSection(
       "프로필",
-      renderProfileLinkRow(applicantListUrl(r), docs, { label: "잡코리아 지원자 목록", listMode: true }),
+      renderProfileLinkRow(applicantListUrl(r), docs, { label: `${platformLabel(r.platform)} 지원자 목록`, listMode: true }),
       { icon: Icon.link({ size: 16 }) },
     ),
     detailSection(
@@ -1476,7 +1480,7 @@ async function renderApplicantDetail(pane) {
         [
           "공고 보기",
           r.posting?.source_url
-            ? `<a href="${esc(r.posting.source_url)}" target="_blank" rel="noopener">잡코리아 공고 ${Icon.external({ size: 13, className: "inline-icon" })}</a>`
+            ? `<a href="${esc(r.posting.source_url)}" target="_blank" rel="noopener">${esc(platformLabel(r.platform))} 공고 ${Icon.external({ size: 13, className: "inline-icon" })}</a>`
             : "—",
         ],
       ]),
