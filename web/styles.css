@@ -334,7 +334,7 @@ a:hover { text-decoration: underline; }
   position: relative;
 }
 .list-pane {
-  padding: 12px 14px 28px;
+  padding: 14px 16px 28px;
   border-right: 0;
   min-width: 0;
   overflow-x: hidden;
@@ -1360,7 +1360,7 @@ a.pdf-open-btn:active {
 .card-list.applicant-cards,
 .card-list.posting-cards {
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
+  gap: 10px;
 }
 @media (max-width: 1100px) {
   .card-list.applicant-cards,
@@ -1389,8 +1389,8 @@ a.pdf-open-btn:active {
   font-weight: 500;
 }
 .applicant-card {
-  padding: 8px 10px;
-  gap: 6px;
+  padding: 12px 14px;
+  gap: 8px;
   min-height: 0;
 }
 .applicant-card .card-name {
@@ -1412,7 +1412,8 @@ a.pdf-open-btn:active {
   align-items: flex-start;
   gap: 8px;
   min-width: 0;
-  padding-top: 2px;
+  padding-top: 6px;
+  margin-top: 2px;
   border-top: 1px dashed var(--line);
 }
 .applicant-posting-row .posting-plat {
@@ -1432,8 +1433,8 @@ a.pdf-open-btn:active {
   -webkit-line-clamp: unset;
 }
 .posting-card {
-  padding: 8px 10px;
-  gap: 0;
+  padding: 12px 14px;
+  gap: 4px;
   min-height: 0;
 }
 .posting-card-row {
@@ -1455,7 +1456,7 @@ a.pdf-open-btn:active {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 5px;
   overflow: hidden;
 }
 .posting-title-row {
