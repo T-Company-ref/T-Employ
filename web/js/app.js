@@ -1,6 +1,6 @@
-import { configReady, createClient } from "./client.js?v=20260723i";
-import * as api from "./api.js?v=20260723i";
-import { Icon } from "./icons.js?v=20260723i";
+import { configReady, createClient } from "./client.js?v=20260807f";
+import * as api from "./api.js?v=20260807f";
+import { Icon } from "./icons.js?v=20260807f";
 import {
   stageLabel,
   proposalLabel,
@@ -14,14 +14,22 @@ import {
   POSTING_STATUS_SIDE,
   MEETING_LABELS,
   INTERVIEW_RESULT_LABELS,
-} from "./labels.js?v=20260723i";
+  PROPOSAL_STATUS_LABELS,
+} from "./labels.js?v=20260807f";
 import {
   JOB_CATEGORIES,
   resolveTalentCategory,
   categoryShort,
-} from "./categories.js?v=20260723i";
+} from "./categories.js?v=20260807f";
 
 const appEl = document.getElementById("app");
+
+const TAB_HASH = {
+  dashboard: "#/dashboard",
+  postings: "#/postings",
+  applicants: "#/applicants",
+  talent: "#/talent",
+};
 
 /** @type {import('@supabase/supabase-js').SupabaseClient | null} */
 let sb = null;
@@ -38,9 +46,20 @@ let filterPostingStatus = "open";
 let filterPlatformSide = "";
 /** 지원자 탭: 특정 공고만 (빈 문자열 = 해당 상태 전체) */
 let filterApplicantPostingId = "";
+/** 지원자: 이력서/첨부/단계/대학 */
+let filterHasResume = ""; // "" | "yes" | "no"
+let filterHasAttach = "";
+let filterStage = "";
+let filterSchool = "";
+/** 인재검색: 제안 상태 */
+let filterProposal = "";
+/** @type {Map<string, { resume: boolean, attach: boolean }>} */
+let appDocFlags = new Map();
 /** 사이드 섹션 접힘 */
 let sideFoldPlat = false;
 let sideFoldPost = false;
+/** 상세 필터 패널 */
+let filterAdvancedOpen = false;
 /** 지원자 사이드용 공고 캐시 */
 let postingNavRows = [];
 /** 공고 선택 시 하단 지원자 */
@@ -49,6 +68,68 @@ let listPage = 1;
 const PAGE_SIZE = 10;
 let toastTimer = null;
 let dashboardStats = null;
+let paneWheelBound = false;
+
+/** 탭 데이터 캐시 — 헤더 이동 시 재조회 생략 */
+const tabCache = {
+  dashboard: /** @type {{ stats: any, at: number } | null} */ (null),
+  postings: /** @type {{ rows: any[], q: string, at: number } | null} */ (null),
+  applicants: /** @type {{ rows: any[], postingNavRows: any[], flags: Map<string, any>, q: string, at: number } | null} */ (null),
+  talent: /** @type {{ rows: any[], q: string, platform: string, at: number } | null} */ (null),
+};
+const CACHE_TTL_MS = 90_000;
+
+function cacheFresh(entry) {
+  return Boolean(entry && Date.now() - entry.at < CACHE_TTL_MS);
+}
+
+function invalidateTabCache(which) {
+  if (!which || which === "all") {
+    tabCache.dashboard = null;
+    tabCache.postings = null;
+    tabCache.applicants = null;
+    tabCache.talent = null;
+    return;
+  }
+  tabCache[which] = null;
+}
+
+function resetListFilters({ keepPostingId = false, keepPostingStatus = false } = {}) {
+  filterQ = "";
+  filterPlatform = "";
+  filterPlatformSide = "";
+  filterCategory = "all";
+  if (!keepPostingStatus) filterPostingStatus = "open";
+  if (!keepPostingId) filterApplicantPostingId = "";
+  filterHasResume = "";
+  filterHasAttach = "";
+  filterStage = "";
+  filterSchool = "";
+  filterProposal = "";
+  sideFoldPlat = false;
+  sideFoldPost = false;
+  filterAdvancedOpen = false;
+  listPage = 1;
+}
+
+function tabFromHash() {
+  const raw = (location.hash || "").replace(/^#\/?/, "").split(/[/?#]/)[0];
+  if (raw === "postings" || raw === "applicants" || raw === "talent" || raw === "dashboard") {
+    return raw;
+  }
+  return null;
+}
+
+function syncHashFromTab() {
+  const want = TAB_HASH[tab] || TAB_HASH.dashboard;
+  if (location.hash !== want) {
+    history.replaceState(null, "", want);
+  }
+}
+
+function docFlagsFor(appId) {
+  return appDocFlags.get(appId) || { resume: false, attach: false };
+}
 
 function postingPeriodEndMs(p) {
   const end = p?.meta?.periodEnd;
@@ -156,61 +237,38 @@ function attachmentDocs(docs) {
 function renderDocuments(docs) {
   const resume = resumeDoc(docs);
   const atts = attachmentDocs(docs);
-  if (!resume && !atts.length) {
-    return `<p class="muted empty-inline">저장된 이력서·첨부파일이 없습니다.</p>`;
-  }
+  const resumeVal = resume
+    ? `<a class="doc-link" href="${esc(resume.file_url)}" target="_blank" rel="noopener">${esc(
+        resume.source_name || "이력서 열기",
+      )} ${Icon.external({ size: 12, className: "inline-icon" })}</a>${
+        resume.collected_at
+          ? `<span class="doc-link-meta muted"> · ${esc(new Date(resume.collected_at).toLocaleDateString("ko-KR"))}</span>`
+          : ""
+      }${
+        selected?.profile_meta?.resumeLastModified
+          ? `<div class="doc-link-note muted">최종수정 ${esc(
+              fmtResumeLastModified(selected.profile_meta.resumeLastModified),
+            )}</div>`
+          : ""
+      }`
+    : `<span class="muted">없음</span>`;
 
-  const resumeBlock = resume
-    ? `<div class="doc-block">
-        <div class="doc-block-label">이력서</div>
-        <a class="pdf-open-btn" href="${esc(resume.file_url)}" target="_blank" rel="noopener" title="이력서 PDF 열기">
-          ${Icon.file({ size: 18, className: "pdf-open-icon" })}
-          <span class="pdf-open-label">이력서 PDF 열기</span>
-          ${Icon.external({ size: 13, className: "pdf-open-ext" })}
-        </a>
-        ${
-          resume.collected_at
-            ? `<p class="doc-meta muted">${esc(new Date(resume.collected_at).toLocaleDateString("ko-KR"))} 수집</p>`
-            : ""
-        }
-        ${
-          selected?.profile_meta?.resumeLastModified
-            ? `<p class="doc-meta muted">이 이력서는 ${esc(
-                fmtResumeLastModified(selected.profile_meta.resumeLastModified),
-              )}에 최종 수정된 이력서입니다.</p>`
-            : ""
-        }
-      </div>`
-    : `<div class="doc-block">
-        <div class="doc-block-label">이력서</div>
-        <span class="pdf-open-btn is-disabled" title="PDF 없음">
-          ${Icon.file({ size: 18, className: "pdf-open-icon" })}
-          <span class="pdf-open-label">이력서 PDF 없음</span>
-        </span>
-      </div>`;
+  const attVal = atts.length
+    ? `<span class="doc-link-stack">${atts
+        .map((d) => {
+          const kind = d.source_label || (d.doc_type === "portfolio" ? "포트폴리오" : "첨부");
+          const name = d.source_name || "첨부파일";
+          return `<a class="doc-link" href="${esc(d.file_url)}" target="_blank" rel="noopener" title="${esc(kind)}">${esc(
+            name,
+          )} ${Icon.external({ size: 12, className: "inline-icon" })}</a>`;
+        })
+        .join("")}</span>`
+    : `<span class="muted">없음</span>`;
 
-  const attBlock = `<div class="doc-block">
-      <div class="doc-block-label">첨부파일${atts.length ? ` · ${atts.length}` : ""}</div>
-      ${
-        atts.length
-          ? `<ul class="doc-attach-list">${atts
-              .map((d) => {
-                const kind = d.source_label || (d.doc_type === "portfolio" ? "포트폴리오" : "첨부");
-                const name = d.source_name || "첨부파일";
-                return `<li>
-                  <a class="attach-open-btn" href="${esc(d.file_url)}" target="_blank" rel="noopener" title="${esc(name)} 열기">
-                    <span class="attach-kind">${esc(kind)}</span>
-                    <span class="attach-name">${esc(name)}</span>
-                    <span class="attach-action">열기 ${Icon.external({ size: 13, className: "inline-icon" })}</span>
-                  </a>
-                </li>`;
-              })
-              .join("")}</ul>`
-          : `<p class="muted empty-inline">첨부파일 없음</p>`
-      }
-    </div>`;
-
-  return `<div class="doc-panel">${resumeBlock}${attBlock}</div>`;
+  return infoRows([
+    ["이력서", resumeVal],
+    ["첨부", attVal],
+  ]);
 }
 
 function renderProfileLinkRow(profileUrl, docs, { label = "원본 프로필", listMode = false } = {}) {
@@ -279,6 +337,7 @@ function renderLogin(errorMsg = "") {
 }
 
 let dashCharts = [];
+let postingStageChart = null;
 
 function destroyDashCharts() {
   for (const c of dashCharts) {
@@ -291,16 +350,104 @@ function destroyDashCharts() {
   dashCharts = [];
 }
 
+function destroyPostingStageChart() {
+  try {
+    postingStageChart?.destroy?.();
+  } catch {
+    /* ignore */
+  }
+  postingStageChart = null;
+}
+
+/** 공고 지원자 단계 분포 — 플랫폼 live counts 우선, 없으면 DB stage */
+function postingStageBreakdown(apps, metaCounts) {
+  if (metaCounts && typeof metaCounts === "object") {
+    const live = Object.entries(metaCounts)
+      .filter(([k]) => !/전체|^total$/i.test(String(k).trim()))
+      .map(([k, v]) => [String(k), Number(v) || 0])
+      .filter(([, v]) => v > 0);
+    if (live.length) return live;
+  }
+  /** @type {Record<string, number>} */
+  const counts = {};
+  for (const a of apps || []) {
+    const key = stageLabel(a.current_stage || "applied");
+    counts[key] = (counts[key] || 0) + 1;
+  }
+  return Object.entries(counts).filter(([, v]) => v > 0);
+}
+
+const STAGE_CHART_COLORS = [
+  "#2563eb",
+  "#0d9488",
+  "#d97706",
+  "#dc2626",
+  "#7c3aed",
+  "#059669",
+  "#64748b",
+  "#db2777",
+  "#0891b2",
+];
+
+function mountPostingStageChart(canvasId, breakdown) {
+  destroyPostingStageChart();
+  const ChartCtor = window.Chart;
+  const canvas = document.getElementById(canvasId);
+  if (!ChartCtor || !canvas || !breakdown?.length) return;
+
+  postingStageChart = new ChartCtor(canvas, {
+    type: "doughnut",
+    data: {
+      labels: breakdown.map(([k]) => k),
+      datasets: [
+        {
+          data: breakdown.map(([, v]) => v),
+          backgroundColor: breakdown.map((_, i) => STAGE_CHART_COLORS[i % STAGE_CHART_COLORS.length]),
+          borderWidth: 0,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: "right",
+          labels: {
+            boxWidth: 10,
+            boxHeight: 10,
+            padding: 10,
+            font: { size: 11 },
+            color: "#475569",
+          },
+        },
+        tooltip: {
+          callbacks: {
+            label(ctx) {
+              const total = ctx.dataset.data.reduce((a, b) => a + b, 0) || 1;
+              const v = ctx.parsed;
+              const pct = Math.round((v / total) * 100);
+              return ` ${ctx.label}: ${v}명 (${pct}%)`;
+            },
+          },
+        },
+      },
+      cutout: "58%",
+    },
+  });
+}
+
 function shell(innerList, innerDetail, { fullWidth = false } = {}) {
   const who = staff?.display_name || staff?.email || "—";
   const role = roleLabel(staff?.role);
   const nick = staff?.nickname ? `@${staff.nickname}` : "";
   const tabs = [
-    ["dashboard", "대시보드"],
-    ["postings", "공고"],
-    ["applicants", "지원자"],
-    ["talent", "인재검색"],
+    ["dashboard", `${Icon.dashboard({ size: 15 })} 대시보드`],
+    ["postings", `${Icon.posting({ size: 15 })} 공고`],
+    ["applicants", `${Icon.users({ size: 15 })} 지원자`],
+    ["talent", `${Icon.search({ size: 15 })} 인재검색`],
   ];
+  syncHashFromTab();
   appEl.innerHTML = `
     <div class="app-shell">
       <header class="topbar">
@@ -335,14 +482,17 @@ function shell(innerList, innerDetail, { fullWidth = false } = {}) {
 
   appEl.querySelectorAll("[data-tab]").forEach((btn) => {
     btn.addEventListener("click", async () => {
-      tab = btn.getAttribute("data-tab");
-      selected = null;
-      filterCategory = "all";
-      filterPostingStatus = "open";
-      filterApplicantPostingId = "";
-      selectedPostingApps = [];
-      listPage = 1;
-      await refresh();
+      const next = btn.getAttribute("data-tab");
+      if (!next) return;
+      if (next === tab) {
+        resetListFilters();
+        selected = null;
+        selectedPostingApps = [];
+        invalidateTabCache(tab);
+        await refresh(true);
+        return;
+      }
+      await switchTab(next);
     });
   });
   document.getElementById("btn-logout")?.addEventListener("click", async () => {
@@ -352,6 +502,75 @@ function shell(innerList, innerDetail, { fullWidth = false } = {}) {
   });
   document.getElementById("btn-profile")?.addEventListener("click", () => openProfileSettings());
   document.getElementById("detail-backdrop")?.addEventListener("click", () => closeDetailDrawer());
+  bindPaneWheelRouting();
+}
+
+/** 마우스 아래 스크롤 영역만 휠 적용 (목록↔상세 교차 스크롤 방지) */
+function bindPaneWheelRouting() {
+  if (paneWheelBound) return;
+  paneWheelBound = true;
+  document.addEventListener(
+    "wheel",
+    (e) => {
+      if (e.ctrlKey) return; // 브라우저 줌
+      const path = typeof e.composedPath === "function" ? e.composedPath() : [];
+      /** @type {Element | null} */
+      let target = null;
+      for (const node of path) {
+        if (!(node instanceof Element)) continue;
+        if (
+          node.id === "list-pane" ||
+          node.classList.contains("detail-scroll") ||
+          node.classList.contains("cat-side") ||
+          node.classList.contains("side-nav") ||
+          node.classList.contains("detail-app-list") ||
+          node.classList.contains("interest-list") ||
+          node.classList.contains("table-scroll")
+        ) {
+          const oy = getComputedStyle(node).overflowY;
+          if (oy === "auto" || oy === "scroll" || node.id === "list-pane" || node.classList.contains("detail-scroll")) {
+            target = node;
+            break;
+          }
+        }
+      }
+      if (!target) {
+        const under = document.elementFromPoint(e.clientX, e.clientY);
+        target =
+          under?.closest(
+            "#list-pane, .detail-scroll, .cat-side, .side-nav, .detail-app-list, .interest-list, .table-scroll",
+          ) || null;
+      }
+      if (!target) return;
+
+      // 사이드 내비는 자체 스크롤, 그 외 목록 영역은 list-pane으로 귀속
+      if (
+        target.classList.contains("cat-side") ||
+        target.classList.contains("side-nav")
+      ) {
+        const can = target.scrollHeight > target.clientHeight + 1;
+        if (!can) {
+          const list = document.getElementById("list-pane");
+          if (list) target = list;
+          else return;
+        }
+      }
+
+      const max = target.scrollHeight - target.clientHeight;
+      if (max <= 1) {
+        // 스크롤 불가면 부모 목록/상세로 넘기지 않음 (교차 방지)
+        if (target.classList.contains("detail-scroll") || target.id === "list-pane") {
+          e.preventDefault();
+        }
+        return;
+      }
+
+      e.preventDefault();
+      const next = Math.min(max, Math.max(0, target.scrollTop + e.deltaY));
+      target.scrollTop = next;
+    },
+    { passive: false, capture: true },
+  );
 }
 
 function isCompactLayout() {
@@ -361,18 +580,18 @@ function isCompactLayout() {
 function openDetailDrawer() {
   document.getElementById("detail-pane")?.classList.add("is-open");
   document.getElementById("detail-backdrop")?.classList.add("is-open");
-  if (isCompactLayout()) document.body.style.overflow = "hidden";
 }
 
 function closeDetailDrawer() {
   selected = null;
+  destroyPostingStageChart();
   document.getElementById("detail-pane")?.classList.remove("is-open");
   document.getElementById("detail-backdrop")?.classList.remove("is-open");
   document.body.style.overflow = "";
   document.querySelectorAll(".candidate-card.selected").forEach((x) => x.classList.remove("selected"));
   const pane = document.getElementById("detail-pane");
   if (pane) {
-    pane.innerHTML = `<div class="empty detail-empty">목록에서 항목을 선택하세요.</div>`;
+    pane.innerHTML = "";
   }
 }
 
@@ -561,10 +780,85 @@ async function openProfileSettings() {
 }
 
 function listToolbar(title, { showPlatform = true } = {}) {
+  const hasAdvanced =
+    Boolean(filterHasResume || filterHasAttach || filterSchool || filterProposal) || filterAdvancedOpen;
+  const advancedCount = [filterHasResume, filterHasAttach, filterSchool, filterProposal].filter(Boolean)
+    .length;
+
+  const applicantPrimary =
+    tab === "applicants"
+      ? `<select class="select filter-select" id="f-stage" title="단계">
+        <option value="">단계 전체</option>
+        ${Object.entries(STAGE_LABELS)
+          .map(
+            ([v, l]) =>
+              `<option value="${esc(v)}" ${filterStage === v ? "selected" : ""}>${esc(l)}</option>`,
+          )
+          .join("")}
+      </select>`
+      : "";
+
+  const applicantAdvanced =
+    tab === "applicants"
+      ? `<div class="filter-advanced ${filterAdvancedOpen || advancedCount ? "is-open" : ""}" id="filter-advanced">
+      <select class="select filter-select" id="f-resume" title="이력서">
+        <option value="">이력서 전체</option>
+        <option value="yes" ${filterHasResume === "yes" ? "selected" : ""}>이력서 있음</option>
+        <option value="no" ${filterHasResume === "no" ? "selected" : ""}>이력서 없음</option>
+      </select>
+      <select class="select filter-select" id="f-attach" title="첨부">
+        <option value="">첨부 전체</option>
+        <option value="yes" ${filterHasAttach === "yes" ? "selected" : ""}>첨부 있음</option>
+        <option value="no" ${filterHasAttach === "no" ? "selected" : ""}>첨부 없음</option>
+      </select>
+      <select class="select filter-select" id="f-school" title="대학/학교">
+        <option value="">학교 전체</option>
+        ${schoolFilterOptions()
+          .map(
+            (s) =>
+              `<option value="${esc(s)}" ${filterSchool === s ? "selected" : ""}>${esc(s)}</option>`,
+          )
+          .join("")}
+      </select>
+    </div>`
+      : "";
+
+  const talentAdvanced =
+    tab === "talent"
+      ? `<div class="filter-advanced ${filterAdvancedOpen || filterProposal ? "is-open" : ""}" id="filter-advanced">
+      <select class="select filter-select" id="f-proposal" title="제안 상태">
+        <option value="">제안상태 전체</option>
+        ${Object.entries(PROPOSAL_STATUS_LABELS)
+          .map(
+            ([v, l]) =>
+              `<option value="${esc(v)}" ${filterProposal === v ? "selected" : ""}>${esc(l)}</option>`,
+          )
+          .join("")}
+      </select>
+    </div>`
+      : "";
+
+  const showAdvancedToggle = tab === "applicants" || tab === "talent";
+  const clearNeeded =
+    filterHasResume ||
+    filterHasAttach ||
+    filterStage ||
+    filterSchool ||
+    filterProposal ||
+    filterQ ||
+    (tab === "talent" && filterPlatform);
+
   return `
     <div class="toolbar">
-      <h2>${esc(title)}</h2>
-      <input class="search" id="q" placeholder="검색…" value="${esc(filterQ)}" />
+      <h2>${title}</h2>
+      <input class="search" id="q" placeholder="${
+        tab === "applicants"
+          ? "이름·학교·직무·연락처 검색…"
+          : tab === "talent"
+            ? "이름·헤드라인 검색…"
+            : "검색…"
+      }" value="${esc(filterQ)}" />
+      ${applicantPrimary}
       ${
         showPlatform
           ? `<select class="select" id="platform">
@@ -574,12 +868,38 @@ function listToolbar(title, { showPlatform = true } = {}) {
       </select>`
           : ""
       }
-      <button type="button" class="btn btn-ghost btn-sm" id="btn-refresh">새로고침</button>
-    </div>`;
+      ${
+        showAdvancedToggle
+          ? `<button type="button" class="btn btn-ghost btn-sm filter-more-btn ${hasAdvanced ? "is-active" : ""}" id="btn-filter-more">
+              ${Icon.sliders({ size: 14 })} 상세 필터${advancedCount ? ` (${advancedCount})` : ""}
+            </button>`
+          : ""
+      }
+      ${
+        clearNeeded
+          ? `<button type="button" class="btn btn-ghost btn-sm" id="btn-clear-filters">초기화</button>`
+          : ""
+      }
+      <button type="button" class="btn btn-ghost btn-sm" id="btn-refresh">${Icon.refresh({ size: 14 })} 새로고침</button>
+    </div>
+    ${applicantAdvanced}
+    ${talentAdvanced}`;
+}
+
+function schoolFilterOptions() {
+  const set = new Set();
+  for (const r of rows) {
+    const school = String(r.profile_meta?.educationSchool || "").trim();
+    if (school) set.add(school);
+  }
+  return [...set].sort((a, b) => a.localeCompare(b, "ko"));
 }
 
 function bindListChrome() {
-  document.getElementById("btn-refresh")?.addEventListener("click", () => refresh(false));
+  document.getElementById("btn-refresh")?.addEventListener("click", () => {
+    invalidateTabCache(tab);
+    refresh(false, { forceFetch: true });
+  });
   document.getElementById("q")?.addEventListener("change", async (e) => {
     filterQ = e.target.value;
     listPage = 1;
@@ -597,6 +917,49 @@ function bindListChrome() {
     filterPlatformSide = e.target.value;
     listPage = 1;
     await refresh(false);
+  });
+  document.getElementById("btn-clear-filters")?.addEventListener("click", async () => {
+    filterQ = "";
+    filterHasResume = "";
+    filterHasAttach = "";
+    filterStage = "";
+    filterSchool = "";
+    filterProposal = "";
+    if (tab === "talent") {
+      filterPlatform = "";
+      filterPlatformSide = "";
+    }
+    listPage = 1;
+    selected = null;
+    await refresh(true);
+  });
+  document.getElementById("btn-filter-more")?.addEventListener("click", () => {
+    filterAdvancedOpen = !filterAdvancedOpen;
+    paintListPane();
+  });
+  const bindFilterSelect = (id, apply) => {
+    document.getElementById(id)?.addEventListener("change", async (e) => {
+      apply(e.target.value);
+      listPage = 1;
+      selected = null;
+      paintListPane();
+      await renderDetail();
+    });
+  };
+  bindFilterSelect("f-resume", (v) => {
+    filterHasResume = v;
+  });
+  bindFilterSelect("f-attach", (v) => {
+    filterHasAttach = v;
+  });
+  bindFilterSelect("f-stage", (v) => {
+    filterStage = v;
+  });
+  bindFilterSelect("f-school", (v) => {
+    filterSchool = v;
+  });
+  bindFilterSelect("f-proposal", (v) => {
+    filterProposal = v;
   });
 }
 
@@ -624,10 +987,41 @@ function visibleRows() {
     if (filterApplicantPostingId) {
       list = list.filter((r) => (r.posting?.id || r.posting_id) === filterApplicantPostingId);
     }
+    if (filterStage) {
+      list = list.filter((r) => r.current_stage === filterStage);
+    }
+    if (filterSchool) {
+      list = list.filter(
+        (r) => String(r.profile_meta?.educationSchool || "").trim() === filterSchool,
+      );
+    }
+    if (filterHasResume) {
+      list = list.filter((r) => {
+        const has = docFlagsFor(r.id).resume;
+        return filterHasResume === "yes" ? has : !has;
+      });
+    }
+    if (filterHasAttach) {
+      list = list.filter((r) => {
+        const has = docFlagsFor(r.id).attach;
+        return filterHasAttach === "yes" ? has : !has;
+      });
+    }
     return list;
   }
-  if (tab !== "talent" || filterCategory === "all") return rows;
-  return rows.filter((r) => resolveTalentCategory(r) === filterCategory);
+  if (tab === "talent") {
+    let list = rows;
+    const plat = filterPlatformSide || filterPlatform;
+    if (plat) list = list.filter((r) => r.platform === plat);
+    if (filterCategory !== "all") {
+      list = list.filter((r) => resolveTalentCategory(r) === filterCategory);
+    }
+    if (filterProposal) {
+      list = list.filter((r) => r.proposal_status === filterProposal);
+    }
+    return list;
+  }
+  return rows;
 }
 
 function pageRows() {
@@ -647,7 +1041,11 @@ function syncListPageForSelection() {
 }
 
 function listTabTitle() {
-  return tab === "postings" ? "채용 공고" : tab === "applicants" ? "공고 지원자" : "인재검색";
+  return tab === "postings"
+    ? `${Icon.posting({ size: 18 })} 채용 공고`
+    : tab === "applicants"
+      ? `${Icon.users({ size: 18 })} 공고 지원자`
+      : `${Icon.search({ size: 18 })} 인재검색`;
 }
 
 function listCardsHtml() {
@@ -681,20 +1079,43 @@ function renderPagination() {
 
 function talentCategoryNav() {
   if (tab !== "talent") return "";
-  const counts = Object.fromEntries(JOB_CATEGORIES.map((c) => [c.id, 0]));
-  counts.all = rows.length;
-  for (const r of rows) {
-    const id = resolveTalentCategory(r);
-    counts[id] = (counts[id] || 0) + 1;
-  }
-  return `<nav class="cat-side" aria-label="인재 카테고리">
-    ${JOB_CATEGORIES.map((c) => {
-      const n = counts[c.id] ?? 0;
-      return `<button type="button" class="cat-side-btn ${filterCategory === c.id ? "active" : ""}" data-cat="${c.id}">
-        <span class="cat-side-label">${esc(c.short)}</span>
-        <span class="cat-side-count">${n}</span>
-      </button>`;
-    }).join("")}
+  const platforms = [
+    { id: "jobkorea", label: "잡코리아", mark: "J", markClass: "side-mark-jk" },
+    { id: "saramin", label: "사람인", mark: "S", markClass: "side-mark-sr" },
+  ];
+  const platOf = (r) => r.platform;
+  return `<nav class="cat-side side-nav" aria-label="인재 필터">
+    ${platforms
+      .map((p) => {
+        const platRows = rows.filter((r) => platOf(r) === p.id);
+        const platActive = filterPlatformSide === p.id || filterPlatform === p.id;
+        const catCounts = Object.fromEntries(JOB_CATEGORIES.map((c) => [c.id, 0]));
+        catCounts.all = platRows.length;
+        for (const r of platRows) {
+          const id = resolveTalentCategory(r);
+          catCounts[id] = (catCounts[id] || 0) + 1;
+        }
+        return `<section class="side-section side-plat-tree">
+          <button type="button" class="side-item side-plat-head ${platActive && filterCategory === "all" ? "active" : ""}" data-talent-plat="${p.id}" data-cat="all">
+            <span class="side-mark ${p.markClass}">${p.mark}</span>
+            <span class="side-item-label">${esc(p.label)}</span>
+            <span class="side-badge ${platActive ? "side-badge-active" : "side-badge-muted"}">${platRows.length}</span>
+          </button>
+          <div class="side-nested">
+            ${JOB_CATEGORIES.filter((c) => c.id !== "all")
+              .map((c) => {
+                const n = catCounts[c.id] ?? 0;
+                const active = platActive && filterCategory === c.id;
+                return `<button type="button" class="side-item side-nested-item ${active ? "active" : ""}" data-talent-plat="${p.id}" data-cat="${c.id}">
+                  <span class="side-item-label">${esc(c.short)}</span>
+                  <span class="side-badge ${active ? "side-badge-active" : "side-badge-muted"}">${n}</span>
+                </button>`;
+              })
+              .join("")}
+          </div>
+        </section>`;
+      })
+      .join("")}
   </nav>`;
 }
 
@@ -738,11 +1159,11 @@ function sideSummaryCard() {
       ${Icon.clipboard({ size: 18, className: "side-summary-clip" })}
     </div>
     <div class="side-summary-stats">
-      <button type="button" class="side-summary-stat ${openActive ? "is-active" : ""}" data-pstatus="open" data-platform="">
+      <button type="button" class="side-summary-stat ${openActive ? "is-active" : ""}" data-pstatus="open">
         <span class="side-summary-label">${esc(POSTING_STATUS_SIDE.open)}</span>
         <span class="side-summary-num">${openN}</span>
       </button>
-      <button type="button" class="side-summary-stat ${!openActive ? "is-active" : ""}" data-pstatus="closed" data-platform="">
+      <button type="button" class="side-summary-stat ${!openActive ? "is-active" : ""}" data-pstatus="closed">
         <span class="side-summary-label">${esc(POSTING_STATUS_SIDE.closed)}</span>
         <span class="side-summary-num">${closedN}</span>
       </button>
@@ -750,85 +1171,69 @@ function sideSummaryCard() {
   </div>`;
 }
 
-function sidePlatformSection() {
-  const { closedN } = statusCounts();
-  const counts = platformCountsFor(filterPostingStatus === "closed" ? "closed" : "open");
-  const openMode = filterPostingStatus === "open";
-  return `<section class="side-section">
-    <button type="button" class="side-section-head" data-side-fold="plat" aria-expanded="${!sideFoldPlat}">
-      <span class="side-section-title">${Icon.grid({ size: 14 })} 플랫폼</span>
-      <span class="side-chevron ${sideFoldPlat ? "is-collapsed" : ""}">${Icon.chevron({ size: 14 })}</span>
-    </button>
-    <div class="side-section-body ${sideFoldPlat ? "is-collapsed" : ""}">
-      <button type="button" class="side-item ${openMode && filterPlatformSide === "jobkorea" ? "active" : ""}" data-pstatus="open" data-platform="jobkorea">
-        <span class="side-mark side-mark-jk">J</span>
-        <span class="side-item-label">잡코리아</span>
-        <span class="side-badge side-badge-jk">${counts.jk}</span>
-      </button>
-      <button type="button" class="side-item ${openMode && filterPlatformSide === "saramin" ? "active" : ""}" data-pstatus="open" data-platform="saramin">
-        <span class="side-mark side-mark-sr">S</span>
-        <span class="side-item-label">사람인</span>
-        <span class="side-badge ${counts.sr ? "side-badge-sr" : "side-badge-muted"}">${counts.sr}</span>
-      </button>
-      <button type="button" class="side-item ${filterPostingStatus === "closed" ? "active is-closed" : ""}" data-pstatus="closed" data-platform="">
-        <span class="side-mark side-mark-closed">${Icon.flag({ size: 13 })}</span>
-        <span class="side-item-label">마감</span>
-        <span class="side-badge side-badge-closed">${closedN}</span>
-      </button>
-    </div>
-  </section>`;
-}
+/** 플랫폼 대분류 → (지원자 탭) 공고 소분류 */
+function sidePlatformTree({ withPostings = false } = {}) {
+  const status = filterPostingStatus === "closed" ? "closed" : "open";
+  const counts = platformCountsFor(status);
+  const platforms = [
+    { id: "jobkorea", label: "잡코리아", mark: "J", markClass: "side-mark-jk", n: counts.jk },
+    { id: "saramin", label: "사람인", mark: "S", markClass: "side-mark-sr", n: counts.sr },
+  ];
 
-function sidePostingSection() {
-  if (tab !== "applicants") return "";
-  const openPostings = postingNavRows.filter((p) => {
-    if (isPostingClosed(p)) return false;
-    return !filterPlatformSide || p.platform === filterPlatformSide;
-  });
-  const closedPostings = postingNavRows.filter((p) => {
-    if (!isPostingClosed(p)) return false;
-    return !filterPlatformSide || p.platform === filterPlatformSide;
-  });
-  const statusPostings = filterPostingStatus === "closed" ? closedPostings : openPostings;
-  const visibleForStatus = rows.filter((r) => {
-    const closed = isPostingClosed(r.posting || {});
-    const statusOk = filterPostingStatus === "closed" ? closed : !closed;
-    const platformOk =
-      !filterPlatformSide || (r.platform || r.posting?.platform) === filterPlatformSide;
-    return statusOk && platformOk;
-  });
+  return platforms
+    .map((p) => {
+      const platActive = filterPlatformSide === p.id;
+      const postings = withPostings
+        ? postingNavRows.filter((row) => {
+            const closed = isPostingClosed(row);
+            const statusOk = status === "closed" ? closed : !closed;
+            return statusOk && row.platform === p.id;
+          })
+        : [];
+      const platAppCount = withPostings
+        ? rows.filter((r) => {
+            const closed = isPostingClosed(r.posting || {});
+            const statusOk = status === "closed" ? closed : !closed;
+            return statusOk && (r.platform || r.posting?.platform) === p.id;
+          }).length
+        : p.n;
 
-  return `<section class="side-section">
-    <button type="button" class="side-section-head" data-side-fold="post" aria-expanded="${!sideFoldPost}">
-      <span class="side-section-title">${Icon.folder({ size: 14 })} 공고별</span>
-      <span class="side-chevron ${sideFoldPost ? "is-collapsed" : ""}">${Icon.chevron({ size: 14 })}</span>
-    </button>
-    <div class="side-section-body ${sideFoldPost ? "is-collapsed" : ""}">
-      <button type="button" class="side-item ${!filterApplicantPostingId ? "active" : ""}" data-app-posting="">
-        <span class="side-mark side-mark-all">${Icon.list({ size: 13 })}</span>
-        <span class="side-item-label">전체</span>
-        <span class="side-badge side-badge-active">${visibleForStatus.length}</span>
-      </button>
-      ${statusPostings
-        .map((p) => {
-          const n = rows.filter((r) => (r.posting?.id || r.posting_id) === p.id).length;
-          const active = filterApplicantPostingId === p.id;
-          return `<button type="button" class="side-item ${active ? "active" : ""}" data-app-posting="${esc(p.id)}" title="${esc(p.title || "")}">
-            <span class="side-mark side-mark-doc">${Icon.file({ size: 13 })}</span>
-            <span class="side-item-label">${esc(p.title || "(제목 없음)")}</span>
-            <span class="side-badge ${active ? "side-badge-active" : "side-badge-muted"}">${n}</span>
-          </button>`;
-        })
-        .join("")}
-    </div>
-  </section>`;
+      return `<section class="side-section side-plat-tree">
+        <button type="button" class="side-item side-plat-head ${platActive && !filterApplicantPostingId ? "active" : ""}" data-pstatus="${status}" data-platform="${p.id}" data-app-posting="">
+          <span class="side-mark ${p.markClass}">${p.mark}</span>
+          <span class="side-item-label">${esc(p.label)}</span>
+          <span class="side-badge ${platActive ? "side-badge-active" : "side-badge-muted"}">${withPostings ? platAppCount : p.n}</span>
+        </button>
+        ${
+          withPostings
+            ? `<div class="side-nested ${platActive ? "" : "is-collapsed"}">
+            <button type="button" class="side-item side-nested-item ${platActive && !filterApplicantPostingId ? "active" : ""}" data-pstatus="${status}" data-platform="${p.id}" data-app-posting="">
+              <span class="side-item-label">전체</span>
+              <span class="side-badge ${platActive && !filterApplicantPostingId ? "side-badge-active" : "side-badge-muted"}">${platAppCount}</span>
+            </button>
+            ${postings
+              .map((post) => {
+                const n = rows.filter((r) => (r.posting?.id || r.posting_id) === post.id).length;
+                const active = filterApplicantPostingId === post.id;
+                return `<button type="button" class="side-item side-nested-item ${active ? "active" : ""}" data-pstatus="${status}" data-platform="${p.id}" data-app-posting="${esc(post.id)}" title="${esc(post.title || "")}">
+                  <span class="side-item-label">${esc(post.title || "(제목 없음)")}</span>
+                  <span class="side-badge ${active ? "side-badge-active" : "side-badge-muted"}">${n}</span>
+                </button>`;
+              })
+              .join("")}
+          </div>`
+            : ""
+        }
+      </section>`;
+    })
+    .join("");
 }
 
 function postingStatusNav() {
   if (tab !== "postings") return "";
   return `<nav class="cat-side side-nav" aria-label="공고 필터">
     ${sideSummaryCard()}
-    ${sidePlatformSection()}
+    ${sidePlatformTree({ withPostings: false })}
   </nav>`;
 }
 
@@ -836,8 +1241,7 @@ function applicantSideNav() {
   if (tab !== "applicants") return "";
   return `<nav class="cat-side side-nav" aria-label="지원자 필터">
     ${sideSummaryCard()}
-    ${sidePlatformSection()}
-    ${sidePostingSection()}
+    ${sidePlatformTree({ withPostings: true })}
   </nav>`;
 }
 
@@ -912,11 +1316,14 @@ function paintListPane() {
 }
 
 function bindTalentCategoryNav() {
-  document.querySelectorAll("[data-cat]").forEach((btn) => {
+  document.querySelectorAll("[data-talent-plat]").forEach((btn) => {
     btn.addEventListener("click", async () => {
-      const next = btn.getAttribute("data-cat") || "all";
-      if (next === filterCategory) return;
-      filterCategory = next;
+      const plat = btn.getAttribute("data-talent-plat") || "";
+      const cat = btn.getAttribute("data-cat") || "all";
+      if (plat === filterPlatformSide && cat === filterCategory) return;
+      filterPlatformSide = plat;
+      filterPlatform = plat;
+      filterCategory = cat;
       listPage = 1;
       selected = null;
       paintListPane();
@@ -926,24 +1333,12 @@ function bindTalentCategoryNav() {
 }
 
 function bindPostingStatusNav() {
-  document.querySelectorAll("[data-side-fold]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const which = btn.getAttribute("data-side-fold");
-      if (which === "plat") sideFoldPlat = !sideFoldPlat;
-      if (which === "post") sideFoldPost = !sideFoldPost;
-      paintListPane();
-    });
-  });
-  document.querySelectorAll("[data-pstatus]").forEach((btn) => {
+  document.querySelectorAll(".side-summary-stat[data-pstatus]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const next = btn.getAttribute("data-pstatus") || "open";
-      const platformAttr = btn.getAttribute("data-platform");
-      const isPlatformBtn = platformAttr !== null;
-      const nextPlatform = isPlatformBtn ? platformAttr : "";
-
-      if (next === filterPostingStatus && (!isPlatformBtn || nextPlatform === filterPlatformSide)) {
-        // 진행중 요약 재클릭 시 플랫폼 전체로
-        if (!isPlatformBtn && filterPlatformSide) {
+      if (next === filterPostingStatus) {
+        // 같은 상태 재클릭 → 플랫폼 필터 해제
+        if (filterPlatformSide || filterApplicantPostingId) {
           filterPlatformSide = "";
           filterApplicantPostingId = "";
           listPage = 1;
@@ -955,8 +1350,26 @@ function bindPostingStatusNav() {
         return;
       }
       filterPostingStatus = next;
-      filterPlatformSide = isPlatformBtn ? nextPlatform : "";
+      filterPlatformSide = "";
       filterApplicantPostingId = "";
+      listPage = 1;
+      selected = null;
+      selectedPostingApps = [];
+      paintListPane();
+      await renderDetail();
+    });
+  });
+
+  document.querySelectorAll(".side-plat-tree [data-platform]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const nextStatus = btn.getAttribute("data-pstatus") || filterPostingStatus;
+      const nextPlatform = btn.getAttribute("data-platform") || "";
+      const nextPosting =
+        btn.getAttribute("data-app-posting") != null ? btn.getAttribute("data-app-posting") || "" : "";
+
+      filterPostingStatus = nextStatus;
+      filterPlatformSide = nextPlatform;
+      filterApplicantPostingId = nextPosting;
       listPage = 1;
       selected = null;
       selectedPostingApps = [];
@@ -967,17 +1380,7 @@ function bindPostingStatusNav() {
 }
 
 function bindApplicantSideNav() {
-  document.querySelectorAll("[data-app-posting]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const next = btn.getAttribute("data-app-posting") || "";
-      if (next === filterApplicantPostingId) return;
-      filterApplicantPostingId = next;
-      listPage = 1;
-      selected = null;
-      paintListPane();
-      await renderDetail();
-    });
-  });
+  // platform tree 핸들러는 bindPostingStatusNav 에서 공통 처리
 }
 
 function bindPostingAppsBelow() {
@@ -987,9 +1390,10 @@ function bindPostingAppsBelow() {
       const id = card.getAttribute("data-goto-app");
       const posting = selected;
       tab = "applicants";
+      resetListFilters();
       filterPostingStatus = posting && isPostingClosed(posting) ? "closed" : "open";
       filterApplicantPostingId = posting?.id || "";
-      filterQ = "";
+      syncHashFromTab();
       await refresh(true);
       selected = rows.find((r) => r.id === id) || null;
       if (selected) {
@@ -1173,24 +1577,29 @@ function mountDashboardCharts() {
       const listPane = document.getElementById("list-pane");
       if (!listPane) return;
       listPane.innerHTML = renderDashboard();
-      document.getElementById("btn-refresh")?.addEventListener("click", () => refresh(false));
+      document.getElementById("btn-refresh")?.addEventListener("click", () => {
+        invalidateTabCache("dashboard");
+        refresh(false, { forceFetch: true });
+      });
       document.querySelectorAll("[data-jump]").forEach((b) => {
         b.addEventListener("click", async () => {
           tab = b.getAttribute("data-jump");
           selected = null;
-          await refresh();
+          resetListFilters();
+          syncHashFromTab();
+          await refresh(true);
         });
       });
       document.querySelectorAll("[data-goto-app]").forEach((b) => {
         b.addEventListener("click", async () => {
           tab = "applicants";
-          filterQ = "";
+          resetListFilters();
+          syncHashFromTab();
           await refresh(true);
           selected = rows.find((r) => r.id === b.getAttribute("data-goto-app")) || null;
           if (selected) {
-            document
-              .querySelector(`.candidate-card[data-id="${selected.id}"]`)
-              ?.classList.add("selected");
+            syncListPageForSelection();
+            paintListPane();
             await renderDetail();
           }
         });
@@ -1206,22 +1615,40 @@ function renderPostingCards() {
       filterPostingStatus === "closed" ? "마감된 공고가 없습니다." : "진행 중 공고가 없습니다."
     }</div>`;
   }
-  return `<div class="card-list">${pageRows()
+  return `<div class="card-list posting-cards">${pageRows()
     .map((r) => {
       const sel = selected?.id === r.id ? "selected" : "";
       const meta = r.meta || {};
-      return `<article class="candidate-card ${sel}" data-id="${esc(r.id)}">
-        <div class="card-name-row">
-          <span class="card-name">${esc(r.title || "(제목 없음)")}</span>
-          ${meta.status ? `<span class="badge">${esc(meta.status)}</span>` : ""}
-        </div>
-        <div class="card-meta-row">
-          <span class="meta-pill platform" title="${esc(platformLabel(r.platform))}">${platformIcon(r.platform)}</span>
-          <span class="meta-pill">${esc(meta.postingNumber || r.external_posting_id || "—")}</span>
-          <span class="meta-pill stage">지원 ${r.applicant_count ?? 0}명</span>
-        </div>
-        <div class="card-footer">
-          <span class="muted">${esc(meta.manager || "담당자 —")}${meta.period ? ` · ${esc(meta.period)}` : ""}</span>
+      const n = r.applicant_count ?? 0;
+      const liveTotal = meta.applicantCounts
+        ? Object.entries(meta.applicantCounts).find(([k]) => /전체|^total$/i.test(String(k)))?.[1]
+        : null;
+      const views = meta.viewCount != null ? Number(meta.viewCount) : null;
+      const recommends = meta.recommendCount != null ? Number(meta.recommendCount) : null;
+      const countTitle =
+        liveTotal != null
+          ? `수집 ${n}명 · 플랫폼 전체 ${liveTotal}명`
+          : `수집 지원자 ${n}명`;
+      const countLabel =
+        liveTotal != null && Number(liveTotal) !== n ? `${n}/${liveTotal}` : String(n);
+      const subParts = [
+        meta.manager,
+        meta.period,
+        meta.status,
+        views != null ? `조회 ${views.toLocaleString("ko-KR")}` : "",
+        recommends != null ? `추천 ${recommends.toLocaleString("ko-KR")}` : "",
+      ].filter(Boolean);
+      const sub = subParts.join(" · ");
+      return `<article class="candidate-card posting-card ${sel}" data-id="${esc(r.id)}">
+        <div class="posting-card-row">
+          <span class="posting-plat" title="${esc(platformLabel(r.platform))}">${platformIcon(r.platform, { large: true })}</span>
+          <div class="posting-card-main">
+            <div class="posting-title-row">
+              <span class="card-name" title="${esc(r.title || "")}">${esc(r.title || "(제목 없음)")}</span>
+              <span class="posting-app-count" title="${esc(countTitle)}">${esc(countLabel)}</span>
+            </div>
+            ${sub ? `<div class="card-sub posting-meta-line" title="${esc(sub)}">${esc(sub)}</div>` : ""}
+          </div>
         </div>
       </article>`;
     })
@@ -1238,51 +1665,49 @@ function renderApplicantsCards() {
           : "진행 중 공고 지원자가 없습니다. 크롤 수집 후 새로고침하세요."
     }</div>`;
   }
-  return `<div class="card-list">${pageRows()
+  return `<div class="card-list applicant-cards">${pageRows()
     .map((r) => {
       const sel = selected?.id === r.id ? "selected" : "";
       const meta = r.profile_meta || {};
-      const postingMeta = r.posting?.meta || {};
       const name = r.candidate?.name || "(이름 없음)";
       const posting = r.posting?.title || "공고명 미수집";
-      const postingNo = postingMeta.postingNumber ? ` · ${postingMeta.postingNumber}` : "";
+      const position = String(meta.position || "").trim();
+      const postingLine =
+        position && position !== posting ? `${posting} · ${position}` : posting;
+      const flags = docFlagsFor(r.id);
       const badges = [
         isNew(r.created_at || r.applied_at) ? `<span class="badge new">NEW</span>` : "",
         !r.is_active || !r.candidate?.is_active ? `<span class="badge blocked">블락</span>` : "",
+        flags.resume
+          ? `<span class="badge doc-ok" title="이력서 있음">${Icon.file({ size: 13 })}</span>`
+          : `<span class="badge doc-miss" title="이력서 없음">${Icon.fileMissing({ size: 13 })}</span>`,
+        flags.attach
+          ? `<span class="badge doc-ok" title="첨부 있음">${Icon.paperclip({ size: 13 })}</span>`
+          : "",
       ].join(" ");
-      const subParts = [meta.genderAge, meta.careerTotal].filter(Boolean);
       const edu =
         [meta.educationLevel, meta.educationSchool, meta.educationMajor].filter(Boolean).join(" · ") ||
         meta.education ||
         "";
-      // JK: 태그·경력칩 축소 / 사람인: 동일 슬롯에 학력·희망연봉·직군 표시
-      const tags = (meta.recommendTags || []).slice(0, 2);
-      const careers = (meta.careerHistory || []).slice(0, 1);
+      const infoLine = [meta.genderAge, meta.careerTotal, edu].filter(Boolean).join(" · ");
 
-      return `<article class="candidate-card ${sel}" data-id="${esc(r.id)}">
+      return `<article class="candidate-card applicant-card ${sel}" data-id="${esc(r.id)}">
         <div class="card-top">
           <div class="card-top-main">
-            ${meta.position ? `<p class="card-headline">${esc(meta.position)}</p>` : ""}
             <div class="card-name-row">
               <span class="card-name">${esc(name)}</span>
               ${badges}
             </div>
-            ${subParts.length ? `<div class="card-sub">${esc(subParts.join(" · "))}</div>` : ""}
-            ${edu ? `<div class="card-sub">${esc(edu)}</div>` : ""}
+            ${infoLine ? `<div class="card-sub card-sub-wrap">${esc(infoLine)}</div>` : ""}
           </div>
           <div class="card-top-side">
-            ${meta.desiredSalary ? `<span class="card-salary">${esc(meta.desiredSalary)}</span>` : ""}
             <span class="meta-pill stage">${esc(stageLabel(r.current_stage))}</span>
+            ${meta.desiredSalary ? `<span class="card-salary">${esc(meta.desiredSalary)}</span>` : ""}
           </div>
         </div>
-        <div class="card-meta-row">
-          <span class="meta-pill platform" title="${esc(platformLabel(r.platform))}">${platformIcon(r.platform)}</span>
-          ${meta.platformStatus ? `<span class="meta-pill">${esc(meta.platformStatus)}</span>` : ""}
-        </div>
-        ${renderChips(tags, "badge-chip")}
-        ${renderChips(careers)}
-        <div class="card-footer">
-          <span class="card-posting">${esc(posting)}${esc(postingNo)}</span>
+        <div class="applicant-posting-row">
+          <span class="posting-plat" title="${esc(platformLabel(r.platform))}">${platformIcon(r.platform)}</span>
+          <span class="card-posting">${esc(postingLine)}</span>
         </div>
       </article>`;
     })
@@ -1341,10 +1766,11 @@ async function renderDetail() {
   if (!pane || tab === "dashboard") return;
 
   if (!selected) {
+    destroyPostingStageChart();
     pane.classList.remove("is-open");
     document.getElementById("detail-backdrop")?.classList.remove("is-open");
     document.body.style.overflow = "";
-    pane.innerHTML = `<div class="empty detail-empty">목록에서 항목을 선택하세요.</div>`;
+    pane.innerHTML = "";
     return;
   }
 
@@ -1371,31 +1797,69 @@ async function renderPostingDetail(pane) {
   const r = selected;
   const meta = r.meta || {};
   const liveTotal = meta.applicantCounts
-    ? Object.entries(meta.applicantCounts).find(([k]) => k.includes("전체"))?.[1]
+    ? Object.entries(meta.applicantCounts).find(([k]) => /전체|^total$/i.test(String(k)))?.[1]
     : null;
+  const views = meta.viewCount != null ? Number(meta.viewCount) : null;
+  const recommends = meta.recommendCount != null ? Number(meta.recommendCount) : null;
+  const breakdown = postingStageBreakdown(selectedPostingApps, meta.applicantCounts);
+  const breakdownTotal = breakdown.reduce((s, [, v]) => s + v, 0);
+  const sourceHint = meta.applicantCounts
+    ? Object.keys(meta.applicantCounts).some((k) => !/전체|^total$/i.test(k))
+      ? "플랫폼 집계"
+      : "수집 데이터"
+    : "수집 데이터";
+
+  const chartHtml = breakdown.length
+    ? `<div class="detail-block posting-stage-block">
+        <h3 class="section-title">${Icon.chart({ size: 15 })} 지원자 현황
+          <span class="muted chart-sub">${esc(sourceHint)} · ${breakdownTotal}명</span>
+        </h3>
+        <div class="posting-stage-chart-wrap"><canvas id="chart-posting-stages"></canvas></div>
+        <div class="posting-stage-legend-nums">
+          ${breakdown
+            .map(
+              ([k, v]) =>
+                `<span class="stage-stat"><b>${esc(String(v))}</b> ${esc(k)}</span>`,
+            )
+            .join("")}
+        </div>
+      </div>`
+    : `<div class="detail-block">
+        <h3 class="section-title">${Icon.chart({ size: 15 })} 지원자 현황</h3>
+        <p class="muted empty-inline">집계할 지원자 현황이 없습니다.</p>
+      </div>`;
+
   const body = `
     ${detailSection(
       "공고 정보",
       infoRows([
-        ["공고번호", esc(meta.postingNumber || r.external_posting_id || "—")],
         ["상태", esc(meta.status || (isPostingClosed(r) ? "마감" : "진행 중"))],
         ["담당자", esc(meta.manager || "—")],
         ["기간", esc(meta.period || "—")],
         [
           "지원자",
           `${selectedPostingApps.length || r.applicant_count || 0}명 수집${
-            liveTotal != null ? ` · ${platformLabel(r.platform)} 전체 ${liveTotal}명` : ""
+            liveTotal != null ? ` · ${platformLabel(r.platform)} 전체 ${Number(liveTotal).toLocaleString("ko-KR")}명` : ""
           }`,
+        ],
+        [
+          "조회수",
+          views != null ? `${views.toLocaleString("ko-KR")}` : "—",
+        ],
+        [
+          "추천수",
+          recommends != null ? `${recommends.toLocaleString("ko-KR")}` : "—",
         ],
         [
           "원본 링크",
           r.source_url
-            ? `<a href="${esc(r.source_url)}" target="_blank" rel="noopener">${esc(platformLabel(r.platform))}에서 보기 ${Icon.external({ size: 13, className: "inline-icon" })}</a>`
+            ? `<a class="doc-link" href="${esc(r.source_url)}" target="_blank" rel="noopener">${esc(platformLabel(r.platform))}에서 보기 ${Icon.external({ size: 13, className: "inline-icon" })}</a>`
             : "—",
         ],
       ]),
       { icon: Icon.clipboard({ size: 16 }) },
     )}
+    ${chartHtml}
     <div class="detail-actions">
       <button type="button" class="btn btn-primary btn-sm" id="btn-view-apps">지원자 탭에서 보기</button>
     </div>
@@ -1405,13 +1869,17 @@ async function renderPostingDetail(pane) {
     badges: `${platformIcon(r.platform, { large: true })}`,
   });
 
+  mountPostingStageChart("chart-posting-stages", breakdown);
+
   document.getElementById("btn-view-apps")?.addEventListener("click", async () => {
     tab = "applicants";
+    resetListFilters();
     filterPostingStatus = isPostingClosed(r) ? "closed" : "open";
     filterApplicantPostingId = r.id;
-    filterQ = "";
     selected = null;
-    await refresh();
+    destroyPostingStageChart();
+    syncHashFromTab();
+    await refresh(true);
   });
   bindPostingAppsBelow();
 }
@@ -1420,7 +1888,6 @@ async function renderApplicantDetail(pane) {
   const r = selected;
   const candidateId = r.candidate?.id;
   const meta = r.profile_meta || {};
-  const postingMeta = r.posting?.meta || {};
   const [tags, interviews, history, docs] = await Promise.all([
     api.listTags(sb, "applicant", r.id),
     api.listInterviews(sb, candidateId),
@@ -1444,86 +1911,70 @@ async function renderApplicantDetail(pane) {
     .map(esc)
     .join(" · ");
 
-  const highlightHtml = detailFacts([
-    ["희망연봉", esc(meta.desiredSalary || "—")],
-    ["경력", esc(meta.careerTotal || "—")],
-    ["학력", esc(edu || "—")],
-    ["지원일", esc(fmtDate(r.applied_at))],
-    ["수집일", esc(fmtDate(r.created_at))],
-    [
-      "이력서 최종 수정일",
-      meta.resumeLastModified
-        ? esc(fmtResumeLastModified(meta.resumeLastModified))
-        : "—",
-    ],
-  ]);
+  const overview = `<div class="detail-block">
+    ${infoRows([
+      ["희망연봉", esc(meta.desiredSalary || "—")],
+      ["경력", esc(meta.careerTotal || "—")],
+      ["학력", esc(edu || "—")],
+      ["지원일", esc(fmtDate(r.applied_at))],
+      ["이력서 수정", meta.resumeLastModified ? esc(fmtResumeLastModified(meta.resumeLastModified)) : "—"],
+      ["이메일", esc(r.candidate?.email || "—")],
+      ["공고", esc(r.posting?.title || "공고명 미수집")],
+      [
+        "공고 링크",
+        r.posting?.source_url
+          ? `<a class="doc-link" href="${esc(r.posting.source_url)}" target="_blank" rel="noopener">${esc(platformLabel(r.platform))} 열기 ${Icon.external({ size: 12, className: "inline-icon" })}</a>`
+          : "—",
+      ],
+      [
+        "지원자 목록",
+        (() => {
+          const u = applicantListUrl(r);
+          return u
+            ? `<a class="doc-link" href="${esc(u)}" target="_blank" rel="noopener">${esc(platformLabel(r.platform))} 목록 ${Icon.external({ size: 12, className: "inline-icon" })}</a>`
+            : "—";
+        })(),
+      ],
+    ])}
+    ${meta.recommendTags?.length ? renderChips(meta.recommendTags, "badge-chip") : ""}
+    ${meta.careerHistory?.length ? renderChips(meta.careerHistory) : ""}
+  </div>`;
 
-  const profileHtml = [
-    highlightHtml,
-    meta.recommendTags?.length ? renderChips(meta.recommendTags, "badge-chip") : "",
-    meta.careerHistory?.length ? renderChips(meta.careerHistory) : "",
-    detailSection(
-      "연락처",
-      infoRows([["이메일", esc(r.candidate?.email || "—")]]),
-      { icon: Icon.phone({ size: 16 }) },
-    ),
-    detailSection(
-      "서류",
-      renderDocuments(docs),
-      { icon: Icon.file({ size: 16 }) },
-    ),
-    detailSection(
-      "프로필",
-      renderProfileLinkRow(applicantListUrl(r), docs, { label: `${platformLabel(r.platform)} 지원자 목록`, listMode: true }),
-      { icon: Icon.link({ size: 16 }) },
-    ),
-    detailSection(
-      "공고",
-      infoRows([
-        ["공고명", esc(r.posting?.title || "공고명 미수집")],
-        ["공고번호", esc(postingMeta.postingNumber || r.posting?.external_posting_id || "—")],
-        ["담당자", esc(postingMeta.manager || "—")],
-        [
-          "공고 보기",
-          r.posting?.source_url
-            ? `<a href="${esc(r.posting.source_url)}" target="_blank" rel="noopener">${esc(platformLabel(r.platform))} 공고 ${Icon.external({ size: 13, className: "inline-icon" })}</a>`
-            : "—",
-        ],
-      ]),
-      { icon: Icon.clipboard({ size: 16 }) },
-    ),
-  ].join("");
+  const docsHtml = `<div class="detail-block">
+    <h3 class="section-title">${Icon.folder({ size: 15 })} 서류</h3>
+    ${renderDocuments(docs)}
+    ${
+      caps().canRecommend
+        ? `<div class="detail-actions">
+            <button type="button" class="btn btn-primary btn-sm" id="btn-recommend">${Icon.star({ size: 14 })} 추천하기</button>
+            <span class="muted detail-hint">${esc(staff?.nickname || "")}</span>
+          </div>`
+        : ""
+    }
+  </div>`;
 
-  const docsHtml = `${
-    caps().canRecommend
-      ? `<div class="detail-actions">
-          <button type="button" class="btn btn-primary" id="btn-recommend">추천하기</button>
-          <span class="muted detail-hint">별명 <b>${esc(staff?.nickname || "")}</b>으로 표시</span>
-        </div>`
-      : `<p class="muted empty-inline">이력서·첨부파일은 상단 <b>서류</b> 섹션에서 열 수 있습니다.</p>`
-  }`;
-
-  const tagsHtml = `
+  const tagsHtml = `<div class="detail-block">
+    <h3 class="section-title">${Icon.tag({ size: 15 })} 태그</h3>
     ${renderTagChips(tags, { canRemove: true })}
     ${
       caps().canTagExtra
-        ? `<div class="stack tag-form">
-        <label>기타 태그</label>
+        ? `<div class="stack tag-form compact-form">
         <select id="tag-type">
           ${Object.entries(TAG_LABELS)
             .map(([v, l]) => `<option value="${v}">${esc(l)}</option>`)
             .join("")}
         </select>
         <input id="tag-comment" placeholder="코멘트 (선택)" />
-        <button type="button" class="btn btn-primary btn-sm" id="btn-add-tag">태그 저장</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-add-tag">저장</button>
       </div>`
         : ""
-    }`;
+    }
+  </div>`;
 
   const pipelineHtml = caps().canManagePipeline
-    ? `${detailSection(
-        "면접",
-        `<ul class="timeline">
+    ? `<div class="detail-block">
+        <h3 class="section-title">${Icon.calendar({ size: 15 })} 면접 · 상태</h3>
+        <ul class="timeline">
         ${
           interviews.length
             ? interviews
@@ -1535,11 +1986,10 @@ async function renderApplicantDetail(pane) {
                     ${i.note ? `<div class="muted">${esc(i.note)}</div>` : ""}</li>`,
                 )
                 .join("")
-            : `<li class="muted">일정 없음</li>`
+            : `<li class="muted">면접 일정 없음</li>`
         }
       </ul>
-      <div class="stack form-block">
-        <label>면접 일정 등록</label>
+      <div class="stack form-block compact-form">
         <input id="iv-at" type="datetime-local" />
         <input id="iv-who" placeholder="면접관" />
         <select id="iv-type">
@@ -1548,12 +1998,11 @@ async function renderApplicantDetail(pane) {
             .join("")}
         </select>
         <textarea id="iv-note" placeholder="메모"></textarea>
-        <button type="button" class="btn btn-primary btn-sm" id="btn-schedule">일정 저장</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-schedule">일정 저장</button>
       </div>
       ${
         interviews[0]
-          ? `<div class="stack form-block">
-              <label>최근 면접 결과</label>
+          ? `<div class="stack form-block compact-form">
               <select id="iv-result">
                 ${Object.entries(INTERVIEW_RESULT_LABELS)
                   .filter(([k]) => k !== "scheduled")
@@ -1565,12 +2014,8 @@ async function renderApplicantDetail(pane) {
                 data-ivid="${esc(interviews[0].id)}">결과 반영</button>
             </div>`
           : ""
-      }`,
-        { icon: Icon.calendar({ size: 16 }) },
-      )}
-      ${detailSection(
-        "상태 변경",
-        `<div class="stack form-block">
+      }
+      <div class="stack form-block compact-form" style="margin-top:10px">
         <select id="stage">${stageOptions(r.current_stage)}</select>
         <input id="stage-reason" placeholder="사유" />
         <div class="detail-actions">
@@ -1589,15 +2034,14 @@ async function renderApplicantDetail(pane) {
                     ${h.reason ? `<div class="muted">${esc(h.reason)}</div>` : ""}</li>`,
                 )
                 .join("")
-            : `<li class="muted">이력 없음</li>`
+            : `<li class="muted">상태 이력 없음</li>`
         }
-      </ul>`,
-        { icon: Icon.chart({ size: 16 }) },
-      )}`
-    : detailSection(
-        "상태 이력",
-        `<p class="stage-readonly">현재 단계: <strong>${esc(stageLabel(r.current_stage))}</strong></p>
-      <ul class="timeline">
+      </ul>
+    </div>`
+    : `<div class="detail-block">
+        <h3 class="section-title">${Icon.pin({ size: 15 })} 상태</h3>
+        <p class="stage-readonly">현재: <strong>${esc(stageLabel(r.current_stage))}</strong></p>
+        <ul class="timeline">
         ${
           history.length
             ? history
@@ -1609,18 +2053,12 @@ async function renderApplicantDetail(pane) {
                 .join("")
             : `<li class="muted">이력 없음</li>`
         }
-      </ul>`,
-        { icon: Icon.chart({ size: 16 }) },
-      );
+      </ul>
+    </div>`;
 
-  const body = [
-    profileHtml,
-    detailSection("추천", docsHtml, { icon: Icon.star({ size: 16 }) }),
-    detailSection("추천 태그", tagsHtml, { icon: Icon.star({ size: 16 }) }),
-    pipelineHtml,
-  ].join("");
-
-  pane.innerHTML = wrapDetail(name, subBits, body, { badges: headerBadges });
+  pane.innerHTML = wrapDetail(name, subBits, [overview, docsHtml, tagsHtml, pipelineHtml].join(""), {
+    badges: headerBadges,
+  });
 
   bindApplicantActions(r, candidateId);
 }
@@ -1922,36 +2360,157 @@ function bindCardSelection() {
   });
 }
 
-async function refresh(resetSelection = true) {
+async function ensureTabData(force = false) {
+  if (tab === "dashboard") {
+    if (!force && cacheFresh(tabCache.dashboard)) {
+      dashboardStats = tabCache.dashboard.stats;
+      return;
+    }
+    dashboardStats = await api.getDashboardStats(sb);
+    tabCache.dashboard = { stats: dashboardStats, at: Date.now() };
+    return;
+  }
+
+  if (tab === "postings") {
+    const hit = tabCache.postings;
+    if (!force && cacheFresh(hit) && hit.q === filterQ) {
+      rows = hit.rows;
+      return;
+    }
+    rows = await api.listPostings(sb, { q: filterQ, limit: 500 });
+    appDocFlags = new Map();
+    tabCache.postings = { rows, q: filterQ, at: Date.now() };
+    return;
+  }
+
+  if (tab === "applicants") {
+    const hit = tabCache.applicants;
+    if (!force && cacheFresh(hit) && hit.q === filterQ) {
+      rows = hit.rows;
+      postingNavRows = hit.postingNavRows;
+      appDocFlags = hit.flags;
+      return;
+    }
+    const [apps, postings, flags] = await Promise.all([
+      api.listApplications(sb, { q: filterQ }),
+      api.listPostings(sb, { limit: 500 }),
+      api.listApplicationDocFlags(sb).catch(() => new Map()),
+    ]);
+    rows = apps;
+    postingNavRows = postings;
+    appDocFlags = flags;
+    tabCache.applicants = {
+      rows,
+      postingNavRows,
+      flags: appDocFlags,
+      q: filterQ,
+      at: Date.now(),
+    };
+    // postings 목록 캐시도 갱신
+    if (!filterQ) tabCache.postings = { rows: postings, q: "", at: Date.now() };
+    return;
+  }
+
+  // talent — 전체 로드 후 클라이언트에서 플랫폼/분야 필터
+  const hit = tabCache.talent;
+  if (!force && cacheFresh(hit) && hit.q === filterQ) {
+    rows = hit.rows;
+    return;
+  }
+  rows = await api.listTalents(sb, { q: filterQ, platform: "", limit: 500 });
+  appDocFlags = new Map();
+  tabCache.talent = { rows, q: filterQ, platform: "", at: Date.now() };
+}
+
+function paintNavActive() {
+  document.querySelectorAll("[data-tab]").forEach((btn) => {
+    btn.classList.toggle("active", btn.getAttribute("data-tab") === tab);
+  });
+}
+
+function ensureSplitMain() {
+  const main = document.querySelector(".main");
+  if (!main) return;
+  main.classList.remove("main-full");
+  if (!document.getElementById("detail-pane")) {
+    main.insertAdjacentHTML(
+      "beforeend",
+      `<div class="detail-backdrop" id="detail-backdrop"></div>
+       <aside class="detail-pane" id="detail-pane"></aside>`,
+    );
+    document.getElementById("detail-backdrop")?.addEventListener("click", () => closeDetailDrawer());
+  }
+}
+
+async function switchTab(next) {
+  const prev = tab;
+  tab = next;
+  selected = null;
+  selectedPostingApps = [];
+  destroyPostingStageChart();
+  resetListFilters();
+  syncHashFromTab();
+
+  const shellExists = Boolean(document.querySelector(".app-shell"));
+  const stayInList =
+    shellExists && prev !== "dashboard" && next !== "dashboard";
+
+  await ensureTabData(false);
+  clampListPage();
+
+  if (stayInList) {
+    paintNavActive();
+    ensureSplitMain();
+    paintListPane();
+    const pane = document.getElementById("detail-pane");
+    if (pane) {
+      pane.classList.remove("is-open");
+      pane.innerHTML = "";
+    }
+    document.getElementById("detail-backdrop")?.classList.remove("is-open");
+    return;
+  }
+
+  await refresh(true, { skipFetch: true });
+}
+
+async function refresh(resetSelection = true, { skipFetch = false, forceFetch = false } = {}) {
   if (resetSelection) {
     selected = null;
     listPage = 1;
   }
   const keepId = selected?.id;
+  syncHashFromTab();
+
+  if (!skipFetch) await ensureTabData(forceFetch);
 
   if (tab === "dashboard") {
     destroyDashCharts();
-    dashboardStats = await api.getDashboardStats(sb);
     shell(renderDashboard(), "", { fullWidth: true });
     bindListChrome();
     mountDashboardCharts();
     document.querySelectorAll("[data-jump]").forEach((btn) => {
       btn.addEventListener("click", async () => {
-        tab = btn.getAttribute("data-jump");
-        selected = null;
-        await refresh();
+        await switchTab(btn.getAttribute("data-jump"));
       });
     });
     document.querySelectorAll("[data-goto-app]").forEach((btn) => {
       btn.addEventListener("click", async () => {
+        resetListFilters();
         tab = "applicants";
-        filterQ = "";
-        await refresh(true);
+        syncHashFromTab();
+        await ensureTabData(false);
         selected = rows.find((r) => r.id === btn.getAttribute("data-goto-app")) || null;
+        shell(listContentHtml(), "");
+        bindListChrome();
+        bindPagination();
+        bindCardSelection();
+        bindTalentCategoryNav();
+        bindPostingStatusNav();
+        bindApplicantSideNav();
         if (selected) {
-          document
-            .querySelector(`.candidate-card[data-id="${selected.id}"]`)
-            ?.classList.add("selected");
+          syncListPageForSelection();
+          paintListPane();
           await renderDetail();
         }
       });
@@ -1960,19 +2519,6 @@ async function refresh(resetSelection = true) {
   }
 
   destroyDashCharts();
-
-  if (tab === "postings") {
-    rows = await api.listPostings(sb, { q: filterQ, limit: 500 });
-  } else if (tab === "applicants") {
-    const [apps, postings] = await Promise.all([
-      api.listApplications(sb, { q: filterQ }),
-      api.listPostings(sb, { limit: 500 }),
-    ]);
-    rows = apps;
-    postingNavRows = postings;
-  } else {
-    rows = await api.listTalents(sb, { q: filterQ, platform: filterPlatform, limit: 500 });
-  }
 
   if (keepId) selected = rows.find((r) => r.id === keepId) || null;
   if (selected) syncListPageForSelection();
@@ -1986,10 +2532,7 @@ async function refresh(resetSelection = true) {
     selectedPostingApps = [];
   }
 
-  shell(
-    listContentHtml(),
-    `<div class="empty detail-empty">목록에서 항목을 선택하세요.</div>`,
-  );
+  shell(listContentHtml(), "");
   bindListChrome();
   bindPagination();
   bindCardSelection();
@@ -2010,7 +2553,16 @@ async function refresh(resetSelection = true) {
 
 async function bootApp() {
   staff = await api.getMyStaff(sb);
+  const fromHash = tabFromHash();
+  if (fromHash) tab = fromHash;
+  else syncHashFromTab();
   await refresh(true);
+
+  window.addEventListener("hashchange", async () => {
+    const next = tabFromHash();
+    if (!next || next === tab) return;
+    await switchTab(next);
+  });
 }
 
 async function main() {

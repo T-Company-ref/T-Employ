@@ -329,20 +329,50 @@ export async function listApplications(
   const needle = q.trim().toLowerCase();
   if (!needle) return data;
   return data.filter((row) => {
+    const meta = row.profile_meta || {};
     const hay = [
       row.candidate?.name,
       row.candidate?.email,
       row.candidate?.phone,
       row.platform,
       row.current_stage,
-      row.profile_meta?.position,
-      row.profile_meta?.careerTotal,
+      meta.position,
+      meta.careerTotal,
+      meta.educationSchool,
+      meta.educationMajor,
+      meta.educationLevel,
+      meta.education,
+      row.posting?.title,
     ]
       .filter(Boolean)
       .join(" ")
       .toLowerCase();
     return hay.includes(needle);
   });
+}
+
+/** application_id → { resume, attach } 빠른 필터용 */
+export async function listApplicationDocFlags(sb) {
+  const { data, error } = await sb
+    .from("candidate_documents")
+    .select("application_id, doc_type")
+    .not("application_id", "is", null)
+    .limit(50_000);
+  if (error) throw error;
+  /** @type {Map<string, { resume: boolean, attach: boolean }>} */
+  const map = new Map();
+  for (const row of data || []) {
+    const id = row.application_id;
+    if (!id) continue;
+    let cur = map.get(id);
+    if (!cur) {
+      cur = { resume: false, attach: false };
+      map.set(id, cur);
+    }
+    if (row.doc_type === "resume") cur.resume = true;
+    else if (row.doc_type === "portfolio" || row.doc_type === "other") cur.attach = true;
+  }
+  return map;
 }
 
 export async function listTalents(sb, { q = "", platform = "", limit = 500 } = {}) {
