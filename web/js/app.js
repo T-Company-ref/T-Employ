@@ -1,6 +1,6 @@
-import { configReady, createClient } from "./client.js?v=20260807f";
-import * as api from "./api.js?v=20260807f";
-import { Icon } from "./icons.js?v=20260807f";
+import { configReady, createClient } from "./client.js?v=20260807p";
+import * as api from "./api.js?v=20260807p";
+import { Icon } from "./icons.js?v=20260807p";
 import {
   stageLabel,
   proposalLabel,
@@ -15,12 +15,12 @@ import {
   MEETING_LABELS,
   INTERVIEW_RESULT_LABELS,
   PROPOSAL_STATUS_LABELS,
-} from "./labels.js?v=20260807f";
+} from "./labels.js?v=20260807p";
 import {
   JOB_CATEGORIES,
   resolveTalentCategory,
   categoryShort,
-} from "./categories.js?v=20260807f";
+} from "./categories.js?v=20260807p";
 
 const appEl = document.getElementById("app");
 
@@ -1459,6 +1459,253 @@ function bindPagination() {
 }
 
 let dashTrendMode = "apps"; // apps | talents
+/** @type {Set<string>} 비어 있으면 전체 공고 */
+let dashTrendPostingIds = new Set();
+let dashPostingMenuOpen = false;
+
+const _dashDefaultRange = api.defaultDashRange();
+/** 적용된 조회 기간 (KST YYYY-MM-DD) */
+let dashRangeFrom = _dashDefaultRange.from;
+let dashRangeTo = _dashDefaultRange.to;
+/** 14d | thisWeek | thisMonth | lastMonth | thisYear | lastYear | custom */
+let dashRangePreset = "14d";
+let dashRangeMenuOpen = false;
+/** 캘린더에 표시 중인 연/월 (month: 0-11) */
+let dashCalViewYear = Number(_dashDefaultRange.to.slice(0, 4));
+let dashCalViewMonth = Number(_dashDefaultRange.to.slice(5, 7)) - 1;
+/** 범위 선택 중 첫 클릭 */
+let dashCalPickStart = null;
+let dashCalHover = null;
+
+function dashFmtKey(key) {
+  if (!key) return "";
+  const [y, m, d] = key.split("-");
+  return `${y}.${m}.${d}`;
+}
+
+function dashRangeSummary() {
+  const labels = {
+    "14d": "최근 14일",
+    thisWeek: "이번 주",
+    thisMonth: "이번 달",
+    lastMonth: "지난 달",
+    thisYear: "올해",
+    lastYear: "작년",
+  };
+  if (dashRangePreset !== "custom" && labels[dashRangePreset]) {
+    return labels[dashRangePreset];
+  }
+  if (dashRangeFrom === dashRangeTo) return dashFmtKey(dashRangeFrom);
+  return `${dashFmtKey(dashRangeFrom)} – ${dashFmtKey(dashRangeTo)}`;
+}
+
+function dashRangeSubtitle() {
+  const n = api.daysBetweenKeys(dashRangeFrom, dashRangeTo);
+  return `${dashFmtKey(dashRangeFrom)} – ${dashFmtKey(dashRangeTo)} · ${n}일`;
+}
+
+function resolveDashPreset(preset) {
+  const today = api.kstTodayKey();
+  const y = Number(today.slice(0, 4));
+  const m = Number(today.slice(5, 7)) - 1;
+  if (preset === "14d") return api.defaultDashRange();
+  if (preset === "thisWeek") {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Seoul",
+      weekday: "short",
+    }).format(new Date(`${today}T12:00:00+09:00`));
+    const map = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+    const back = map[parts] === 0 ? 6 : (map[parts] ?? 1) - 1;
+    return { from: api.addDaysToKey(today, -back), to: today };
+  }
+  if (preset === "thisMonth") {
+    const b = api.monthBounds(y, m);
+    return { from: b.from, to: today };
+  }
+  if (preset === "lastMonth") {
+    const ly = m === 0 ? y - 1 : y;
+    const lm = m === 0 ? 11 : m - 1;
+    return api.monthBounds(ly, lm);
+  }
+  if (preset === "thisYear") return { from: `${y}-01-01`, to: today };
+  if (preset === "lastYear") return api.yearBounds(y - 1);
+  return { from: dashRangeFrom, to: dashRangeTo };
+}
+
+function dashDraftRange() {
+  if (!dashCalPickStart) return { from: dashRangeFrom, to: dashRangeTo };
+  const end = dashCalHover || dashCalPickStart;
+  return dashCalPickStart <= end
+    ? { from: dashCalPickStart, to: end }
+    : { from: end, to: dashCalPickStart };
+}
+
+function dashFilteredTrendSeries() {
+  const s = dashboardStats;
+  if (!s) return { labels: [], values: [] };
+  const from = s.rangeFrom || dashRangeFrom;
+  const to = s.rangeTo || dashRangeTo;
+  if (dashTrendMode === "talents") {
+    return api.buildDailySeriesForRange(s.talentDateRows || [], "created_at", from, to);
+  }
+  let rows = s.appDateRows || [];
+  if (dashTrendPostingIds.size) {
+    rows = rows.filter((r) => r.posting_id && dashTrendPostingIds.has(r.posting_id));
+  }
+  return api.buildDailySeriesForRange(rows, "applied_at", from, to);
+}
+
+function dashPostingFilterSummary() {
+  const opts = dashboardStats?.postingOptions || [];
+  if (!dashTrendPostingIds.size) return "공고 전체";
+  if (dashTrendPostingIds.size === 1) {
+    const id = [...dashTrendPostingIds][0];
+    const title = opts.find((p) => p.id === id)?.title || "공고 1건";
+    return title.length > 18 ? `${title.slice(0, 18)}…` : title;
+  }
+  return `공고 ${dashTrendPostingIds.size}건`;
+}
+
+function renderDashPostingFilter() {
+  const opts = dashboardStats?.postingOptions || [];
+  if (!opts.length) return "";
+  const allOn = dashTrendPostingIds.size === 0;
+  const items = opts
+    .map((p) => {
+      const checked = allOn || dashTrendPostingIds.has(p.id);
+      return `<label class="dash-posting-item">
+        <input type="checkbox" data-dash-posting="${esc(p.id)}" ${checked ? "checked" : ""} />
+        <span title="${esc(p.title)}">${esc(p.title)}</span>
+      </label>`;
+    })
+    .join("");
+  return `<div class="dash-posting-filter ${dashTrendMode === "talents" ? "is-disabled" : ""}">
+    <button type="button" class="chip-filter ${dashTrendPostingIds.size ? "active" : ""}" id="btn-dash-postings" ${
+      dashTrendMode === "talents" ? "disabled" : ""
+    } aria-expanded="${dashPostingMenuOpen ? "true" : "false"}">${esc(dashPostingFilterSummary())}</button>
+    <div class="dash-posting-menu ${dashPostingMenuOpen ? "is-open" : ""}" id="dash-posting-menu" role="group" aria-label="공고 다중 선택">
+      <label class="dash-posting-item dash-posting-all">
+        <input type="checkbox" data-dash-posting-all ${allOn ? "checked" : ""} />
+        <span>전체 공고</span>
+      </label>
+      <div class="dash-posting-list">${items}</div>
+    </div>
+  </div>`;
+}
+
+function renderDashCalDays() {
+  const y = dashCalViewYear;
+  const m = dashCalViewMonth;
+  const firstDow = new Date(Date.UTC(y, m, 1)).getUTCDay(); // 0=Sun
+  const daysInMonth = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+  const today = api.kstTodayKey();
+  const draft = dashDraftRange();
+  const cells = [];
+  for (let i = 0; i < firstDow; i++) cells.push(`<span class="dash-cal-day is-empty"></span>`);
+  for (let day = 1; day <= daysInMonth; day++) {
+    const key = `${y}-${String(m + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const inRange = key >= draft.from && key <= draft.to;
+    const isStart = key === draft.from;
+    const isEnd = key === draft.to;
+    const isToday = key === today;
+    const future = key > today;
+    const cls = [
+      "dash-cal-day",
+      inRange ? "in-range" : "",
+      isStart ? "is-start" : "",
+      isEnd ? "is-end" : "",
+      isToday ? "is-today" : "",
+      future ? "is-future" : "",
+      dashCalPickStart === key ? "is-picking" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    cells.push(
+      `<button type="button" class="${cls}" data-cal-day="${key}" ${future ? "disabled" : ""}>${day}</button>`,
+    );
+  }
+  return cells.join("");
+}
+
+function renderDashRangeFilter() {
+  const yearNow = Number(api.kstTodayKey().slice(0, 4));
+  const years = [];
+  for (let y = yearNow; y >= yearNow - 5; y--) years.push(y);
+  const yearOpts = years
+    .map((y) => `<option value="${y}" ${y === dashCalViewYear ? "selected" : ""}>${y}</option>`)
+    .join("");
+  const monthOpts = Array.from({ length: 12 }, (_, i) => {
+    const selected = i === dashCalViewMonth ? "selected" : "";
+    return `<option value="${i}" ${selected}>${i + 1}월</option>`;
+  }).join("");
+  const presets = [
+    ["14d", "최근 14일"],
+    ["thisWeek", "이번 주"],
+    ["thisMonth", "이번 달"],
+    ["lastMonth", "지난 달"],
+    ["thisYear", "올해"],
+    ["lastYear", "작년"],
+  ]
+    .map(
+      ([id, labelText]) =>
+        `<button type="button" class="dash-range-preset ${dashRangePreset === id ? "active" : ""}" data-range-preset="${id}">${labelText}</button>`,
+    )
+    .join("");
+  const draft = dashDraftRange();
+  const hint = dashCalPickStart
+    ? "끝 날짜를 선택하세요"
+    : "시작일 → 종료일을 클릭하거나 아래 바로가기를 쓰세요";
+
+  return `<div class="dash-range-filter">
+    <button type="button" class="chip-filter ${dashRangePreset !== "14d" ? "active" : ""}" id="btn-dash-range" aria-expanded="${
+      dashRangeMenuOpen ? "true" : "false"
+    }">${esc(dashRangeSummary())}</button>
+    <div class="dash-range-menu ${dashRangeMenuOpen ? "is-open" : ""}" id="dash-range-menu">
+      <div class="dash-range-presets">${presets}</div>
+      <div class="dash-cal-nav">
+        <button type="button" class="dash-cal-nav-btn" data-cal-shift="-12" aria-label="이전 해">«</button>
+        <button type="button" class="dash-cal-nav-btn" data-cal-shift="-1" aria-label="이전 달">‹</button>
+        <select class="dash-cal-select" data-cal-year aria-label="연도">${yearOpts}</select>
+        <select class="dash-cal-select" data-cal-month aria-label="월">${monthOpts}</select>
+        <button type="button" class="dash-cal-nav-btn" data-cal-shift="1" aria-label="다음 달">›</button>
+        <button type="button" class="dash-cal-nav-btn" data-cal-shift="12" aria-label="다음 해">»</button>
+      </div>
+      <div class="dash-cal-weekdays" aria-hidden="true">
+        <span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span>
+      </div>
+      <div class="dash-cal-grid" id="dash-cal-grid">${renderDashCalDays()}</div>
+      <div class="dash-cal-footer">
+        <div class="dash-cal-hint muted">${esc(hint)}</div>
+        <div class="dash-cal-selected">${esc(dashFmtKey(draft.from))} – ${esc(dashFmtKey(draft.to))}</div>
+        <div class="dash-cal-actions">
+          <button type="button" class="btn btn-ghost btn-sm" id="btn-dash-range-reset">최근 14일</button>
+          <button type="button" class="btn btn-primary btn-sm" id="btn-dash-range-apply">적용</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function applyDashDateRange(from, to, preset = "custom") {
+  let a = from;
+  let b = to;
+  if (a > b) [a, b] = [b, a];
+  const today = api.kstTodayKey();
+  if (b > today) b = today;
+  dashRangeFrom = a;
+  dashRangeTo = b;
+  dashRangePreset = preset;
+  dashCalPickStart = null;
+  dashCalHover = null;
+  dashRangeMenuOpen = false;
+  dashPostingMenuOpen = false;
+  dashCalViewYear = Number(b.slice(0, 4));
+  dashCalViewMonth = Number(b.slice(5, 7)) - 1;
+  // 공고 옵션은 기간에 따라 바뀌므로 선택 초기화
+  dashTrendPostingIds = new Set();
+  invalidateTabCache("dashboard");
+  await refresh(false, { forceFetch: true });
+}
 
 function renderDashboard() {
   const s = dashboardStats || {
@@ -1523,10 +1770,12 @@ function renderDashboard() {
       <div class="dash-charts dash-charts-single">
         <div class="panel chart-panel chart-panel-wide">
           <div class="chart-head">
-            <h3>${trendTitle} <span class="muted chart-sub">최근 14일</span></h3>
+            <h3>${trendTitle} <span class="muted chart-sub">${esc(dashRangeSubtitle())}</span></h3>
             <div class="chart-filters" role="group" aria-label="추이 필터">
               <button type="button" class="chip-filter ${dashTrendMode === "apps" ? "active" : ""}" data-trend="apps">지원자</button>
               <button type="button" class="chip-filter ${dashTrendMode === "talents" ? "active" : ""}" data-trend="talents">인재검색</button>
+              ${renderDashRangeFilter()}
+              ${renderDashPostingFilter()}
             </div>
           </div>
           <div class="chart-wrap chart-wrap-lg"><canvas id="chart-trend-daily"></canvas></div>
@@ -1546,16 +1795,51 @@ function renderDashboard() {
     </div>`;
 }
 
+function remountDashboardUi() {
+  const listPane = document.getElementById("list-pane");
+  if (!listPane) return;
+  listPane.innerHTML = renderDashboard();
+  document.getElementById("btn-refresh")?.addEventListener("click", () => {
+    invalidateTabCache("dashboard");
+    refresh(false, { forceFetch: true });
+  });
+  document.querySelectorAll("[data-jump]").forEach((b) => {
+    b.addEventListener("click", async () => {
+      tab = b.getAttribute("data-jump");
+      selected = null;
+      resetListFilters();
+      syncHashFromTab();
+      await refresh(true);
+    });
+  });
+  document.querySelectorAll("[data-goto-app]").forEach((b) => {
+    b.addEventListener("click", async () => {
+      tab = "applicants";
+      resetListFilters();
+      syncHashFromTab();
+      await refresh(true);
+      selected = rows.find((r) => r.id === b.getAttribute("data-goto-app")) || null;
+      if (selected) {
+        syncListPageForSelection();
+        paintListPane();
+        await renderDetail();
+      }
+    });
+  });
+  mountDashboardCharts();
+}
+
 function mountDashboardCharts() {
   destroyDashCharts();
   const ChartCtor = window.Chart;
   if (!ChartCtor || !dashboardStats) return;
 
-  const s = dashboardStats;
   const isTalent = dashTrendMode === "talents";
-  const series = isTalent ? s.talentsDaily : s.appsDaily;
+  const series = dashFilteredTrendSeries();
   const color = isTalent ? "#0d9488" : "#2563eb";
   const soft = isTalent ? "rgba(13, 148, 136, 0.15)" : "rgba(37, 99, 235, 0.15)";
+  const span = api.daysBetweenKeys(dashRangeFrom, dashRangeTo);
+  const pointR = span > 60 ? 0 : span > 31 ? 2 : 3;
 
   const commonScale = {
     grid: { color: "rgba(15, 23, 42, 0.06)" },
@@ -1577,8 +1861,8 @@ function mountDashboardCharts() {
             borderColor: color,
             backgroundColor: soft,
             fill: true,
-            tension: 0.35,
-            pointRadius: 3,
+            tension: span > 90 ? 0.15 : 0.35,
+            pointRadius: pointR,
             pointHoverRadius: 5,
           },
         ],
@@ -1588,7 +1872,15 @@ function mountDashboardCharts() {
         maintainAspectRatio: false,
         plugins: { legend: { display: false } },
         scales: {
-          x: commonScale,
+          x: {
+            ...commonScale,
+            ticks: {
+              ...commonScale.ticks,
+              autoSkip: true,
+              maxTicksLimit: span > 120 ? 8 : span > 45 ? 10 : 14,
+              maxRotation: 0,
+            },
+          },
           y: { ...commonScale, beginAtZero: true, ticks: { ...commonScale.ticks, precision: 0 } },
         },
       },
@@ -1600,37 +1892,208 @@ function mountDashboardCharts() {
       const mode = btn.getAttribute("data-trend");
       if (!mode || mode === dashTrendMode) return;
       dashTrendMode = mode;
-      const listPane = document.getElementById("list-pane");
-      if (!listPane) return;
-      listPane.innerHTML = renderDashboard();
-      document.getElementById("btn-refresh")?.addEventListener("click", () => {
-        invalidateTabCache("dashboard");
-        refresh(false, { forceFetch: true });
+      if (mode === "talents") dashPostingMenuOpen = false;
+      dashRangeMenuOpen = false;
+      remountDashboardUi();
+    });
+  });
+
+  bindDashPostingFilter();
+  bindDashRangeFilter();
+}
+
+function bindDashPostingFilter() {
+  const btnPostings = document.getElementById("btn-dash-postings");
+  const menu = document.getElementById("dash-posting-menu");
+  btnPostings?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (dashTrendMode === "talents") return;
+    dashRangeMenuOpen = false;
+    dashPostingMenuOpen = !dashPostingMenuOpen;
+    remountDashboardUi();
+  });
+
+  menu?.addEventListener("click", (e) => e.stopPropagation());
+
+  menu?.querySelector("[data-dash-posting-all]")?.addEventListener("change", (e) => {
+    const opts = dashboardStats?.postingOptions || [];
+    if (e.target.checked) {
+      dashTrendPostingIds = new Set();
+    } else {
+      dashTrendPostingIds = new Set(opts.map((p) => p.id));
+    }
+    dashPostingMenuOpen = true;
+    remountDashboardUi();
+  });
+
+  menu?.querySelectorAll("[data-dash-posting]").forEach((input) => {
+    input.addEventListener("change", () => {
+      const opts = dashboardStats?.postingOptions || [];
+      const next = new Set();
+      menu.querySelectorAll("[data-dash-posting]").forEach((el) => {
+        if (el.checked) next.add(el.getAttribute("data-dash-posting"));
       });
-      document.querySelectorAll("[data-jump]").forEach((b) => {
-        b.addEventListener("click", async () => {
-          tab = b.getAttribute("data-jump");
-          selected = null;
-          resetListFilters();
-          syncHashFromTab();
-          await refresh(true);
-        });
-      });
-      document.querySelectorAll("[data-goto-app]").forEach((b) => {
-        b.addEventListener("click", async () => {
-          tab = "applicants";
-          resetListFilters();
-          syncHashFromTab();
-          await refresh(true);
-          selected = rows.find((r) => r.id === b.getAttribute("data-goto-app")) || null;
-          if (selected) {
-            syncListPageForSelection();
-            paintListPane();
-            await renderDetail();
-          }
-        });
-      });
-      mountDashboardCharts();
+      dashTrendPostingIds = !next.size || next.size === opts.length ? new Set() : next;
+      dashPostingMenuOpen = true;
+      remountDashboardUi();
+    });
+  });
+
+  if (dashPostingMenuOpen) {
+    const closer = (ev) => {
+      const wrap = document.querySelector(".dash-posting-filter");
+      if (wrap && wrap.contains(ev.target)) return;
+      dashPostingMenuOpen = false;
+      document.removeEventListener("pointerdown", closer, true);
+      remountDashboardUi();
+    };
+    setTimeout(() => document.addEventListener("pointerdown", closer, true), 0);
+  }
+}
+
+function shiftDashCalView(deltaMonths) {
+  let m = dashCalViewMonth + deltaMonths;
+  let y = dashCalViewYear;
+  while (m < 0) {
+    m += 12;
+    y -= 1;
+  }
+  while (m > 11) {
+    m -= 12;
+    y += 1;
+  }
+  const yearNow = Number(api.kstTodayKey().slice(0, 4));
+  if (y < yearNow - 5 || y > yearNow) return;
+  dashCalViewYear = y;
+  dashCalViewMonth = m;
+}
+
+function bindDashRangeFilter() {
+  const btn = document.getElementById("btn-dash-range");
+  const menu = document.getElementById("dash-range-menu");
+
+  btn?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    dashPostingMenuOpen = false;
+    dashRangeMenuOpen = !dashRangeMenuOpen;
+    if (dashRangeMenuOpen) {
+      dashCalPickStart = null;
+      dashCalHover = null;
+      dashCalViewYear = Number(dashRangeTo.slice(0, 4));
+      dashCalViewMonth = Number(dashRangeTo.slice(5, 7)) - 1;
+    }
+    remountDashboardUi();
+  });
+
+  menu?.addEventListener("click", (e) => e.stopPropagation());
+  menu?.addEventListener("pointerdown", (e) => e.stopPropagation());
+
+  menu?.querySelectorAll("[data-range-preset]").forEach((el) => {
+    el.addEventListener("click", async () => {
+      const preset = el.getAttribute("data-range-preset");
+      const { from, to } = resolveDashPreset(preset);
+      await applyDashDateRange(from, to, preset);
+    });
+  });
+
+  menu?.querySelectorAll("[data-cal-shift]").forEach((el) => {
+    el.addEventListener("click", () => {
+      shiftDashCalView(Number(el.getAttribute("data-cal-shift")));
+      dashRangeMenuOpen = true;
+      remountDashboardUi();
+    });
+  });
+
+  menu?.querySelector("[data-cal-year]")?.addEventListener("change", (e) => {
+    dashCalViewYear = Number(e.target.value);
+    dashRangeMenuOpen = true;
+    remountDashboardUi();
+  });
+
+  menu?.querySelector("[data-cal-month]")?.addEventListener("change", (e) => {
+    dashCalViewMonth = Number(e.target.value);
+    dashRangeMenuOpen = true;
+    remountDashboardUi();
+  });
+
+  menu?.querySelectorAll("[data-cal-day]").forEach((el) => {
+    el.addEventListener("mouseenter", () => {
+      if (!dashCalPickStart) return;
+      dashCalHover = el.getAttribute("data-cal-day");
+      const grid = document.getElementById("dash-cal-grid");
+      if (grid) grid.innerHTML = renderDashCalDays();
+      bindDashCalDayClicks();
+      const footerSel = menu.querySelector(".dash-cal-selected");
+      const draft = dashDraftRange();
+      if (footerSel) footerSel.textContent = `${dashFmtKey(draft.from)} – ${dashFmtKey(draft.to)}`;
+    });
+    el.addEventListener("click", async () => {
+      const key = el.getAttribute("data-cal-day");
+      if (!key) return;
+      if (!dashCalPickStart) {
+        dashCalPickStart = key;
+        dashCalHover = key;
+        dashRangeMenuOpen = true;
+        remountDashboardUi();
+        return;
+      }
+      const from = dashCalPickStart <= key ? dashCalPickStart : key;
+      const to = dashCalPickStart <= key ? key : dashCalPickStart;
+      await applyDashDateRange(from, to, "custom");
+    });
+  });
+
+  document.getElementById("btn-dash-range-apply")?.addEventListener("click", async () => {
+    const draft = dashDraftRange();
+    const preset = dashCalPickStart ? "custom" : dashRangePreset;
+    await applyDashDateRange(draft.from, draft.to, preset);
+  });
+
+  document.getElementById("btn-dash-range-reset")?.addEventListener("click", async () => {
+    const { from, to } = api.defaultDashRange();
+    await applyDashDateRange(from, to, "14d");
+  });
+
+  if (dashRangeMenuOpen) {
+    const closer = (ev) => {
+      const wrap = document.querySelector(".dash-range-filter");
+      if (wrap && wrap.contains(ev.target)) return;
+      dashRangeMenuOpen = false;
+      dashCalPickStart = null;
+      dashCalHover = null;
+      document.removeEventListener("pointerdown", closer, true);
+      remountDashboardUi();
+    };
+    setTimeout(() => document.addEventListener("pointerdown", closer, true), 0);
+  }
+}
+
+function bindDashCalDayClicks() {
+  const menu = document.getElementById("dash-range-menu");
+  menu?.querySelectorAll("[data-cal-day]").forEach((el) => {
+    el.addEventListener("mouseenter", () => {
+      if (!dashCalPickStart) return;
+      dashCalHover = el.getAttribute("data-cal-day");
+      const grid = document.getElementById("dash-cal-grid");
+      if (grid) grid.innerHTML = renderDashCalDays();
+      bindDashCalDayClicks();
+      const footerSel = menu.querySelector(".dash-cal-selected");
+      const draft = dashDraftRange();
+      if (footerSel) footerSel.textContent = `${dashFmtKey(draft.from)} – ${dashFmtKey(draft.to)}`;
+    });
+    el.addEventListener("click", async () => {
+      const key = el.getAttribute("data-cal-day");
+      if (!key) return;
+      if (!dashCalPickStart) {
+        dashCalPickStart = key;
+        dashCalHover = key;
+        dashRangeMenuOpen = true;
+        remountDashboardUi();
+        return;
+      }
+      const from = dashCalPickStart <= key ? dashCalPickStart : key;
+      const to = dashCalPickStart <= key ? key : dashCalPickStart;
+      await applyDashDateRange(from, to, "custom");
     });
   });
 }
@@ -2397,11 +2860,22 @@ function bindCardSelection() {
 async function ensureTabData(force = false) {
   if (tab === "dashboard") {
     if (!force && cacheFresh(tabCache.dashboard)) {
-      dashboardStats = tabCache.dashboard.stats;
-      return;
+      const hit = tabCache.dashboard;
+      if (hit.fromKey === dashRangeFrom && hit.toKey === dashRangeTo) {
+        dashboardStats = hit.stats;
+        return;
+      }
     }
-    dashboardStats = await api.getDashboardStats(sb);
-    tabCache.dashboard = { stats: dashboardStats, at: Date.now() };
+    dashboardStats = await api.getDashboardStats(sb, {
+      fromKey: dashRangeFrom,
+      toKey: dashRangeTo,
+    });
+    tabCache.dashboard = {
+      stats: dashboardStats,
+      at: Date.now(),
+      fromKey: dashRangeFrom,
+      toKey: dashRangeTo,
+    };
     return;
   }
 

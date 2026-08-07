@@ -171,48 +171,89 @@ export async function listPostings(sb, { q = "", platform = "", limit = 500 } = 
     .sort((a, b) => postingEndMs(b) - postingEndMs(a) || String(b.updated_at).localeCompare(String(a.updated_at)));
 }
 
-function dayKey(iso) {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function buildDailySeries(rows, dateField, days = 14) {
-  const counts = {};
-  for (const row of rows) {
-    const k = dayKey(row[dateField]);
-    if (!k) continue;
-    counts[k] = (counts[k] || 0) + 1;
-  }
-  const labels = [];
-  const values = [];
-  const now = new Date();
-  now.setHours(12, 0, 0, 0);
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(now);
-    d.setDate(now.getDate() - i);
-    const k = dayKey(d.toISOString());
-    labels.push(`${d.getMonth() + 1}/${d.getDate()}`);
-    values.push(counts[k] || 0);
-  }
-  return { labels, values };
-}
-
 function kstDateKey(isoOrDate) {
   const d = isoOrDate instanceof Date ? isoOrDate : new Date(isoOrDate);
   if (Number.isNaN(d.getTime())) return "";
   return d.toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
 }
 
-function addDaysToKey(dateKey, delta) {
+export function addDaysToKey(dateKey, delta) {
   const [y, m, day] = dateKey.split("-").map(Number);
   const utc = new Date(Date.UTC(y, m - 1, day));
   utc.setUTCDate(utc.getUTCDate() + delta);
   return utc.toISOString().slice(0, 10);
+}
+
+export function kstTodayKey() {
+  return kstDateKey(new Date());
+}
+
+/** inclusive day count between YYYY-MM-DD keys */
+export function daysBetweenKeys(fromKey, toKey) {
+  if (!fromKey || !toKey) return 0;
+  const a = Date.parse(`${fromKey}T12:00:00+09:00`);
+  const b = Date.parse(`${toKey}T12:00:00+09:00`);
+  if (Number.isNaN(a) || Number.isNaN(b)) return 0;
+  return Math.floor(Math.abs(b - a) / 86_400_000) + 1;
+}
+
+export function monthBounds(year, monthIndex) {
+  const from = `${year}-${String(monthIndex + 1).padStart(2, "0")}-01`;
+  const next =
+    monthIndex === 11
+      ? `${year + 1}-01-01`
+      : `${year}-${String(monthIndex + 2).padStart(2, "0")}-01`;
+  const to = addDaysToKey(next, -1);
+  return { from, to };
+}
+
+export function yearBounds(year) {
+  return { from: `${year}-01-01`, to: `${year}-12-31` };
+}
+
+export function defaultDashRange() {
+  const to = kstTodayKey();
+  return { from: addDaysToKey(to, -13), to };
+}
+
+function kstDayStartIso(dateKey) {
+  return new Date(`${dateKey}T00:00:00+09:00`).toISOString();
+}
+
+function kstDayEndIso(dateKey) {
+  return new Date(`${dateKey}T23:59:59.999+09:00`).toISOString();
+}
+
+function formatDayLabel(dateKey, { withYear = false } = {}) {
+  const [y, m, d] = dateKey.split("-");
+  if (withYear) return `${y.slice(2)}.${Number(m)}.${Number(d)}`;
+  return `${Number(m)}/${Number(d)}`;
+}
+
+/** fromKey~toKey(포함) 매일 버킷 — KST 날짜 기준 */
+export function buildDailySeriesForRange(rows, dateField, fromKey, toKey) {
+  const counts = {};
+  for (const row of rows || []) {
+    const k = kstDateKey(row[dateField]);
+    if (!k || k < fromKey || k > toKey) continue;
+    counts[k] = (counts[k] || 0) + 1;
+  }
+  const span = daysBetweenKeys(fromKey, toKey);
+  const withYear = span > 90 || fromKey.slice(0, 4) !== toKey.slice(0, 4);
+  const labels = [];
+  const values = [];
+  for (let k = fromKey; k <= toKey; k = addDaysToKey(k, 1)) {
+    labels.push(formatDayLabel(k, { withYear }));
+    values.push(counts[k] || 0);
+  }
+  return { labels, values, fromKey, toKey };
+}
+
+/** 대시보드 클라이언트 필터용 — applications 행(applied_at)으로 일별 시리즈 생성 */
+export function buildAppsDailySeries(rows, days = 14) {
+  const to = kstTodayKey();
+  const from = addDaysToKey(to, -(days - 1));
+  return buildDailySeriesForRange(rows || [], "applied_at", from, to);
 }
 
 /** 해당 KST 날짜의 월요일(주차 시작) */
@@ -236,53 +277,96 @@ function countByDateKeys(rows, field, predicate) {
   return n;
 }
 
-export async function getDashboardStats(sb) {
-  const since = new Date();
-  since.setDate(since.getDate() - 30);
-  const sinceIso = since.toISOString();
-  const todayKey = kstDateKey(new Date());
+export async function getDashboardStats(sb, { fromKey, toKey } = {}) {
+  const todayKey = kstTodayKey();
+  const defaults = defaultDashRange();
+  let rangeFrom = fromKey || defaults.from;
+  let rangeTo = toKey || defaults.to;
+  if (rangeFrom > rangeTo) [rangeFrom, rangeTo] = [rangeTo, rangeFrom];
+  // 과도한 구간 방지 (약 2년)
+  if (daysBetweenKeys(rangeFrom, rangeTo) > 731) {
+    rangeFrom = addDaysToKey(rangeTo, -730);
+  }
+
+  const kpiSinceKey = addDaysToKey(todayKey, -30);
+  const kpiSinceIso = kstDayStartIso(kpiSinceKey);
+  const chartSinceIso = kstDayStartIso(rangeFrom);
+  const chartUntilIso = kstDayEndIso(rangeTo);
   const yesterdayKey = addDaysToKey(todayKey, -1);
   const weekFrom = weekStartKey(todayKey);
 
-  const [apps, talents, postings, docs, recentApps, appDates, talentDates] = await Promise.all([
-    sb.from("applications").select("id", { count: "exact", head: true }),
-    sb.from("talent_pool_candidates").select("id", { count: "exact", head: true }),
-    sb.from("job_postings").select("id", { count: "exact", head: true }),
-    sb.from("candidate_documents").select("id", { count: "exact", head: true }),
-    sb
-      .from("applications")
-      .select(
-        `id, applied_at, current_stage, platform,
-         candidate:candidates ( name ),
-         posting:job_postings ( title )`,
-      )
-      .order("applied_at", { ascending: false })
-      .limit(10),
-    sb
-      .from("applications")
-      .select("applied_at")
-      .gte("applied_at", sinceIso)
-      .order("applied_at", { ascending: true })
-      .limit(2000),
-    sb
-      .from("talent_pool_candidates")
-      .select("created_at")
-      .gte("created_at", sinceIso)
-      .order("created_at", { ascending: true })
-      .limit(2000),
-  ]);
+  const [apps, talents, postings, docs, recentApps, kpiAppDates, appRows, talentRows] =
+    await Promise.all([
+      sb.from("applications").select("id", { count: "exact", head: true }),
+      sb.from("talent_pool_candidates").select("id", { count: "exact", head: true }),
+      sb.from("job_postings").select("id", { count: "exact", head: true }),
+      sb.from("candidate_documents").select("id", { count: "exact", head: true }),
+      sb
+        .from("applications")
+        .select(
+          `id, applied_at, current_stage, platform,
+           candidate:candidates ( name ),
+           posting:job_postings ( title )`,
+        )
+        .order("applied_at", { ascending: false })
+        .limit(10),
+      sb
+        .from("applications")
+        .select("applied_at")
+        .gte("applied_at", kpiSinceIso)
+        .order("applied_at", { ascending: true })
+        .limit(5000),
+      fetchAllRows(
+        () =>
+          sb
+            .from("applications")
+            .select("applied_at, posting_id, posting:job_postings ( id, title )")
+            .gte("applied_at", chartSinceIso)
+            .lte("applied_at", chartUntilIso)
+            .order("applied_at", { ascending: true }),
+        { pageSize: 1000, max: 20_000 },
+      ),
+      fetchAllRows(
+        () =>
+          sb
+            .from("talent_pool_candidates")
+            .select("created_at")
+            .gte("created_at", chartSinceIso)
+            .lte("created_at", chartUntilIso)
+            .order("created_at", { ascending: true }),
+        { pageSize: 1000, max: 20_000 },
+      ),
+    ]);
 
-  for (const r of [apps, talents, postings, docs, recentApps, appDates, talentDates]) {
+  for (const r of [apps, talents, postings, docs, recentApps, kpiAppDates]) {
     if (r.error) throw r.error;
   }
 
-  const appRows = appDates.data ?? [];
-  const applicantsYesterday = countByDateKeys(appRows, "applied_at", (k) => k === yesterdayKey);
+  const kpiRows = kpiAppDates.data ?? [];
+  const applicantsYesterday = countByDateKeys(kpiRows, "applied_at", (k) => k === yesterdayKey);
   const applicantsThisWeek = countByDateKeys(
-    appRows,
+    kpiRows,
     "applied_at",
     (k) => k >= weekFrom && k <= todayKey,
   );
+
+  /** @type {Map<string, string>} */
+  const postingMap = new Map();
+  for (const row of appRows) {
+    const id = row.posting_id || row.posting?.id;
+    if (!id) continue;
+    const title = row.posting?.title || "공고 미연결";
+    if (!postingMap.has(id)) postingMap.set(id, title);
+  }
+  const postingOptions = [...postingMap.entries()]
+    .map(([id, title]) => ({ id, title }))
+    .sort((a, b) => a.title.localeCompare(b.title, "ko"));
+
+  const appDateRows = appRows.map((r) => ({
+    applied_at: r.applied_at,
+    posting_id: r.posting_id || r.posting?.id || null,
+  }));
+  const talentDateRows = talentRows.map((r) => ({ created_at: r.created_at }));
 
   return {
     applicants: apps.count ?? 0,
@@ -294,8 +378,13 @@ export async function getDashboardStats(sb) {
     yesterdayLabel: yesterdayKey.slice(5).replace("-", "."),
     weekLabel: `${weekFrom.slice(5).replace("-", ".")}–${todayKey.slice(5).replace("-", ".")}`,
     recentApps: recentApps.data ?? [],
-    appsDaily: buildDailySeries(appRows, "applied_at", 14),
-    talentsDaily: buildDailySeries(talentDates.data ?? [], "created_at", 14),
+    rangeFrom,
+    rangeTo,
+    appsDaily: buildDailySeriesForRange(appDateRows, "applied_at", rangeFrom, rangeTo),
+    talentsDaily: buildDailySeriesForRange(talentDateRows, "created_at", rangeFrom, rangeTo),
+    appDateRows,
+    talentDateRows,
+    postingOptions,
   };
 }
 
