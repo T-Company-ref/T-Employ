@@ -359,22 +359,48 @@ function destroyPostingStageChart() {
   postingStageChart = null;
 }
 
-/** 공고 지원자 단계 분포 — 플랫폼 live counts 우선, 없으면 DB stage */
-function postingStageBreakdown(apps, metaCounts) {
-  if (metaCounts && typeof metaCounts === "object") {
-    const live = Object.entries(metaCounts)
-      .filter(([k]) => !/전체|^total$/i.test(String(k).trim()))
-      .map(([k, v]) => [String(k), Number(v) || 0])
-      .filter(([, v]) => v > 0);
-    if (live.length) return live;
+/** 공고 상세 차트용 — 대기/불합격 등 (엑셀 열람·미열람은 쓰지 않음) */
+function postingChartBucket(app) {
+  const stage = String(app?.current_stage || "applied");
+  const ps = String(app?.profile_meta?.platformStatus || app?.profile_meta?.readStatus || "");
+  if (ps === "불합격" || stage === "closed_lost" || stage === "interview_rejected") return "불합격";
+  if (stage === "blocked" || /차단/.test(ps)) return "차단";
+  if (stage === "interviewing") return "면접";
+  if (stage === "offer" || stage === "hired" || stage === "screening_pass") {
+    return stage === "screening_pass" ? "서류통과" : stage === "hired" ? "입사" : "합격";
   }
+  if (stage === "employed_elsewhere") return "타사입사";
+  // applied 등 — 아직 진행 중
+  return "대기";
+}
+
+/** 플랫폼 meta.applicantCounts 가 단계 분포인지 (열람/미열람 집계는 제외) */
+function isStageLikeApplicantCounts(metaCounts) {
+  if (!metaCounts || typeof metaCounts !== "object") return false;
+  const keys = Object.keys(metaCounts).filter((k) => !/전체|^total$/i.test(String(k).trim()));
+  if (!keys.length) return false;
+  if (keys.some((k) => /열람|미열람|조회|추천/.test(String(k)))) return false;
+  return keys.some((k) => /대기|불합격|서류|면접|합격|탈락|지원|통과|제안|입사|종료|블락/.test(String(k)));
+}
+
+/** 공고 지원자 단계 분포 — 수집 지원자(대기/불합격) 우선, 단계형 플랫폼 집계만 보조 */
+function postingStageBreakdown(apps, metaCounts) {
   /** @type {Record<string, number>} */
   const counts = {};
   for (const a of apps || []) {
-    const key = stageLabel(a.current_stage || "applied");
+    const key = postingChartBucket(a);
     counts[key] = (counts[key] || 0) + 1;
   }
-  return Object.entries(counts).filter(([, v]) => v > 0);
+  const fromApps = Object.entries(counts).filter(([, v]) => v > 0);
+  if (fromApps.length) return fromApps;
+
+  if (isStageLikeApplicantCounts(metaCounts)) {
+    return Object.entries(metaCounts)
+      .filter(([k]) => !/전체|^total$/i.test(String(k).trim()))
+      .map(([k, v]) => [String(k), Number(v) || 0])
+      .filter(([, v]) => v > 0);
+  }
+  return [];
 }
 
 const STAGE_CHART_COLORS = [
@@ -1803,11 +1829,11 @@ async function renderPostingDetail(pane) {
   const recommends = meta.recommendCount != null ? Number(meta.recommendCount) : null;
   const breakdown = postingStageBreakdown(selectedPostingApps, meta.applicantCounts);
   const breakdownTotal = breakdown.reduce((s, [, v]) => s + v, 0);
-  const sourceHint = meta.applicantCounts
-    ? Object.keys(meta.applicantCounts).some((k) => !/전체|^total$/i.test(k))
+  const sourceHint = selectedPostingApps?.length
+    ? "수집 데이터"
+    : isStageLikeApplicantCounts(meta.applicantCounts)
       ? "플랫폼 집계"
-      : "수집 데이터"
-    : "수집 데이터";
+      : "수집 데이터";
 
   const chartHtml = breakdown.length
     ? `<div class="detail-block posting-stage-block">

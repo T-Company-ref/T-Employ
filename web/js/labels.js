@@ -7,7 +7,7 @@ export const STAGE_LABELS = {
   interview_rejected: "면접탈락",
   offer: "제안",
   hired: "입사",
-  closed_lost: "종료",
+  closed_lost: "불합격",
   employed_elsewhere: "타사입사",
   blocked: "블락",
 };
