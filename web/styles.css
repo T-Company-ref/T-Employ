@@ -1178,9 +1178,110 @@ a.pdf-open-btn:active {
 .chart-head h3 { margin: 0; }
 .chart-filters {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   align-items: center;
   flex-wrap: wrap;
+}
+.dash-mode-toggle {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.06);
+  border: 1px solid var(--line);
+}
+.dash-mode-btn {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  line-height: 1.2;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+.dash-mode-btn.is-on {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+}
+.dash-mode-btn:not(.is-on):hover {
+  color: var(--text);
+}
+.dash-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 220px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 5px 10px 5px 8px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  text-align: left;
+  line-height: 1.15;
+}
+.dash-filter-btn:hover {
+  border-color: #cbd5e1;
+  background: rgba(15, 23, 42, 0.02);
+}
+.dash-filter-btn.is-active {
+  border-color: #93c5fd;
+  background: var(--brand-soft);
+}
+.dash-filter-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.dash-filter-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  flex-shrink: 0;
+  color: var(--brand);
+  background: var(--brand-soft);
+}
+.dash-filter-btn--range .dash-filter-ico {
+  color: #0f766e;
+  background: rgba(13, 148, 136, 0.12);
+}
+.dash-filter-btn--posting .dash-filter-ico {
+  color: #1d4ed8;
+  background: rgba(37, 99, 235, 0.12);
+}
+.dash-filter-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+.dash-filter-kind {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  text-transform: none;
+}
+.dash-filter-value {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dash-filter-caret {
+  display: inline-flex;
+  color: var(--muted);
+  flex-shrink: 0;
+  opacity: 0.75;
 }
 .chip-filter {
   border: 1px solid var(--line);

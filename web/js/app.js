@@ -1,6 +1,6 @@
-import { configReady, createClient } from "./client.js?v=20260807p";
-import * as api from "./api.js?v=20260807p";
-import { Icon } from "./icons.js?v=20260807p";
+import { configReady, createClient } from "./client.js?v=20260807q";
+import * as api from "./api.js?v=20260807q";
+import { Icon } from "./icons.js?v=20260807q";
 import {
   stageLabel,
   proposalLabel,
@@ -15,12 +15,12 @@ import {
   MEETING_LABELS,
   INTERVIEW_RESULT_LABELS,
   PROPOSAL_STATUS_LABELS,
-} from "./labels.js?v=20260807p";
+} from "./labels.js?v=20260807q";
 import {
   JOB_CATEGORIES,
   resolveTalentCategory,
   categoryShort,
-} from "./categories.js?v=20260807p";
+} from "./categories.js?v=20260807q";
 
 const appEl = document.getElementById("app");
 
@@ -1499,11 +1499,6 @@ function dashRangeSummary() {
   return `${dashFmtKey(dashRangeFrom)} – ${dashFmtKey(dashRangeTo)}`;
 }
 
-function dashRangeSubtitle() {
-  const n = api.daysBetweenKeys(dashRangeFrom, dashRangeTo);
-  return `${dashFmtKey(dashRangeFrom)} – ${dashFmtKey(dashRangeTo)} · ${n}일`;
-}
-
 function resolveDashPreset(preset) {
   const today = api.kstTodayKey();
   const y = Number(today.slice(0, 4));
@@ -1557,13 +1552,13 @@ function dashFilteredTrendSeries() {
 
 function dashPostingFilterSummary() {
   const opts = dashboardStats?.postingOptions || [];
-  if (!dashTrendPostingIds.size) return "공고 전체";
+  if (!dashTrendPostingIds.size) return "전체";
   if (dashTrendPostingIds.size === 1) {
     const id = [...dashTrendPostingIds][0];
-    const title = opts.find((p) => p.id === id)?.title || "공고 1건";
-    return title.length > 18 ? `${title.slice(0, 18)}…` : title;
+    const title = opts.find((p) => p.id === id)?.title || "1건";
+    return title.length > 14 ? `${title.slice(0, 14)}…` : title;
   }
-  return `공고 ${dashTrendPostingIds.size}건`;
+  return `${dashTrendPostingIds.size}건`;
 }
 
 function renderDashPostingFilter() {
@@ -1579,10 +1574,18 @@ function renderDashPostingFilter() {
       </label>`;
     })
     .join("");
+  const hasFilter = dashTrendPostingIds.size > 0;
   return `<div class="dash-posting-filter ${dashTrendMode === "talents" ? "is-disabled" : ""}">
-    <button type="button" class="chip-filter ${dashTrendPostingIds.size ? "active" : ""}" id="btn-dash-postings" ${
+    <button type="button" class="dash-filter-btn dash-filter-btn--posting ${hasFilter ? "is-active" : ""}" id="btn-dash-postings" ${
       dashTrendMode === "talents" ? "disabled" : ""
-    } aria-expanded="${dashPostingMenuOpen ? "true" : "false"}">${esc(dashPostingFilterSummary())}</button>
+    } aria-expanded="${dashPostingMenuOpen ? "true" : "false"}">
+      <span class="dash-filter-ico">${Icon.posting({ size: 14 })}</span>
+      <span class="dash-filter-meta">
+        <span class="dash-filter-kind">공고</span>
+        <span class="dash-filter-value">${esc(dashPostingFilterSummary())}</span>
+      </span>
+      <span class="dash-filter-caret">${Icon.chevron({ size: 14 })}</span>
+    </button>
     <div class="dash-posting-menu ${dashPostingMenuOpen ? "is-open" : ""}" id="dash-posting-menu" role="group" aria-label="공고 다중 선택">
       <label class="dash-posting-item dash-posting-all">
         <input type="checkbox" data-dash-posting-all ${allOn ? "checked" : ""} />
@@ -1657,9 +1660,16 @@ function renderDashRangeFilter() {
     : "시작일 → 종료일을 클릭하거나 아래 바로가기를 쓰세요";
 
   return `<div class="dash-range-filter">
-    <button type="button" class="chip-filter ${dashRangePreset !== "14d" ? "active" : ""}" id="btn-dash-range" aria-expanded="${
+    <button type="button" class="dash-filter-btn dash-filter-btn--range ${dashRangePreset !== "14d" ? "is-active" : ""}" id="btn-dash-range" aria-expanded="${
       dashRangeMenuOpen ? "true" : "false"
-    }">${esc(dashRangeSummary())}</button>
+    }">
+      <span class="dash-filter-ico">${Icon.calendar({ size: 14 })}</span>
+      <span class="dash-filter-meta">
+        <span class="dash-filter-kind">기간</span>
+        <span class="dash-filter-value">${esc(dashRangeSummary())}</span>
+      </span>
+      <span class="dash-filter-caret">${Icon.chevron({ size: 14 })}</span>
+    </button>
     <div class="dash-range-menu ${dashRangeMenuOpen ? "is-open" : ""}" id="dash-range-menu">
       <div class="dash-range-presets">${presets}</div>
       <div class="dash-cal-nav">
@@ -1770,10 +1780,12 @@ function renderDashboard() {
       <div class="dash-charts dash-charts-single">
         <div class="panel chart-panel chart-panel-wide">
           <div class="chart-head">
-            <h3>${trendTitle} <span class="muted chart-sub">${esc(dashRangeSubtitle())}</span></h3>
+            <h3>${trendTitle}</h3>
             <div class="chart-filters" role="group" aria-label="추이 필터">
-              <button type="button" class="chip-filter ${dashTrendMode === "apps" ? "active" : ""}" data-trend="apps">지원자</button>
-              <button type="button" class="chip-filter ${dashTrendMode === "talents" ? "active" : ""}" data-trend="talents">인재검색</button>
+              <div class="dash-mode-toggle" role="group" aria-label="추이 종류">
+                <button type="button" class="dash-mode-btn ${dashTrendMode === "apps" ? "is-on" : ""}" data-trend="apps">지원자</button>
+                <button type="button" class="dash-mode-btn ${dashTrendMode === "talents" ? "is-on" : ""}" data-trend="talents">인재검색</button>
+              </div>
               ${renderDashRangeFilter()}
               ${renderDashPostingFilter()}
             </div>
