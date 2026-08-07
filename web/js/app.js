@@ -1829,10 +1829,18 @@ async function renderPostingDetail(pane) {
         <p class="muted empty-inline">집계할 지원자 현황이 없습니다.</p>
       </div>`;
 
+  const postingNo =
+    r.external_posting_id ||
+    meta.postingNumber ||
+    meta.giNo ||
+    meta.GI_No ||
+    "";
+
   const body = `
     ${detailSection(
       "공고 정보",
       infoRows([
+        ["공고 번호", postingNo ? esc(String(postingNo)) : "—"],
         ["상태", esc(meta.status || (isPostingClosed(r) ? "마감" : "진행 중"))],
         ["담당자", esc(meta.manager || "—")],
         ["기간", esc(meta.period || "—")],
