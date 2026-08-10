@@ -1,6 +1,6 @@
-import { configReady, createClient } from "./client.js?v=20260807q";
-import * as api from "./api.js?v=20260807q";
-import { Icon } from "./icons.js?v=20260807q";
+import { configReady, createClient } from "./client.js?v=20260810f";
+import * as api from "./api.js?v=20260810f";
+import { Icon } from "./icons.js?v=20260810f";
 import {
   stageLabel,
   proposalLabel,
@@ -15,12 +15,12 @@ import {
   MEETING_LABELS,
   INTERVIEW_RESULT_LABELS,
   PROPOSAL_STATUS_LABELS,
-} from "./labels.js?v=20260807q";
+} from "./labels.js?v=20260810f";
 import {
   JOB_CATEGORIES,
   resolveTalentCategory,
   categoryShort,
-} from "./categories.js?v=20260807q";
+} from "./categories.js?v=20260810f";
 
 const appEl = document.getElementById("app");
 
@@ -29,6 +29,7 @@ const TAB_HASH = {
   postings: "#/postings",
   applicants: "#/applicants",
   talent: "#/talent",
+  requirements: "#/requirements",
 };
 
 /** @type {import('@supabase/supabase-js').SupabaseClient | null} */
@@ -76,6 +77,7 @@ const tabCache = {
   postings: /** @type {{ rows: any[], q: string, at: number } | null} */ (null),
   applicants: /** @type {{ rows: any[], postingNavRows: any[], flags: Map<string, any>, q: string, at: number } | null} */ (null),
   talent: /** @type {{ rows: any[], q: string, platform: string, at: number } | null} */ (null),
+  requirements: /** @type {{ rows: any[], q: string, at: number } | null} */ (null),
 };
 const CACHE_TTL_MS = 90_000;
 
@@ -89,6 +91,7 @@ function invalidateTabCache(which) {
     tabCache.postings = null;
     tabCache.applicants = null;
     tabCache.talent = null;
+    tabCache.requirements = null;
     return;
   }
   tabCache[which] = null;
@@ -114,7 +117,7 @@ function resetListFilters({ keepPostingId = false, keepPostingStatus = false } =
 
 function tabFromHash() {
   const raw = (location.hash || "").replace(/^#\/?/, "").split(/[/?#]/)[0];
-  if (raw === "postings" || raw === "applicants" || raw === "talent" || raw === "dashboard") {
+  if (raw === "postings" || raw === "applicants" || raw === "talent" || raw === "dashboard" || raw === "requirements") {
     return raw;
   }
   return null;
@@ -302,6 +305,8 @@ function renderConfigMissing() {
 }
 
 function renderLogin(errorMsg = "") {
+  const demoId = "tbelltest";
+  const demoPw = "TbellTest0518!";
   appEl.innerHTML = `
     <div class="login-shell">
       <form class="login-card" id="login-form">
@@ -316,6 +321,13 @@ function renderLogin(errorMsg = "") {
           <input id="password" name="password" type="password" autocomplete="current-password" required />
         </div>
         <button class="btn btn-primary" type="submit">로그인</button>
+        <button type="button" class="btn btn-ghost" id="btn-access-req" style="width:100%;margin-top:8px">정보 등록 요청</button>
+        <aside class="login-demo" aria-label="테스트 계정 안내">
+          <div class="login-demo-title">테스트 계정</div>
+          <div class="login-demo-row"><span>아이디</span><code>${demoId}</code></div>
+          <div class="login-demo-row"><span>비밀번호</span><code>${demoPw}</code></div>
+          <button type="button" class="btn btn-ghost btn-sm" id="btn-fill-demo">테스트 계정으로 채우기</button>
+        </aside>
         ${errorMsg ? `<div class="err">${esc(errorMsg)}</div>` : ""}
       </form>
     </div>`;
@@ -325,13 +337,84 @@ function renderLogin(errorMsg = "") {
     const fd = new FormData(e.target);
     const email = normalizeLoginId(fd.get("email"));
     const password = String(fd.get("password") || "");
-    const btn = e.target.querySelector("button");
+    const btn = e.target.querySelector('button[type="submit"]');
     btn.disabled = true;
     try {
       await api.signIn(sb, email, password);
       await bootApp();
     } catch (err) {
       renderLogin(err.message || String(err));
+    }
+  });
+  document.getElementById("btn-access-req")?.addEventListener("click", () => openAccessRequestForm());
+  document.getElementById("btn-fill-demo")?.addEventListener("click", () => {
+    document.getElementById("email").value = demoId;
+    document.getElementById("password").value = demoPw;
+    document.getElementById("password").type = "text";
+  });
+}
+
+function openAccessRequestForm() {
+  const root = document.getElementById("modal-root") || (() => {
+    const el = document.createElement("div");
+    el.id = "modal-root";
+    document.body.appendChild(el);
+    return el;
+  })();
+
+  const prefill = String(document.getElementById("email")?.value || "").trim();
+
+  root.innerHTML = `
+    <div class="modal-backdrop" id="modal-backdrop">
+      <div class="modal-card" role="dialog" aria-labelledby="access-title">
+        <div class="detail-header" style="padding:0 0 12px;border:0;background:transparent">
+          <div class="detail-header-text">
+            <h3 id="access-title" style="margin:0">정보 등록 요청</h3>
+            <p class="muted" style="margin:4px 0 0">관리자(yj.kim@tbell.co.kr)에게 등록 요청 메일이 발송됩니다.</p>
+          </div>
+          <button type="button" class="detail-close" id="access-cancel" aria-label="닫기">${Icon.close({ size: 18 })}</button>
+        </div>
+        <div class="stack">
+          <div class="pf-field">
+            <label for="access-email">이메일 *</label>
+            <input id="access-email" type="email" required placeholder="name@tbell.co.kr" value="${esc(prefill)}" />
+          </div>
+          <div class="pf-field">
+            <label for="access-name">이름</label>
+            <input id="access-name" placeholder="홍길동" />
+          </div>
+          <div class="pf-field">
+            <label for="access-msg">요청 내용</label>
+            <textarea id="access-msg" rows="3" placeholder="계정 생성 / 권한 요청 등"></textarea>
+          </div>
+        </div>
+        <div class="actions" style="margin-top:16px">
+          <button type="button" class="btn btn-primary btn-sm" id="access-submit" style="width:auto">요청 보내기</button>
+        </div>
+      </div>
+    </div>`;
+
+  const close = () => {
+    root.innerHTML = "";
+  };
+  document.getElementById("access-cancel")?.addEventListener("click", close);
+  document.getElementById("modal-backdrop")?.addEventListener("click", (e) => {
+    if (e.target.id === "modal-backdrop") close();
+  });
+  document.getElementById("access-submit")?.addEventListener("click", async () => {
+    const email = String(document.getElementById("access-email").value || "").trim().toLowerCase();
+    if (!email.includes("@")) return toast("이메일을 입력하세요", true);
+    const displayName = String(document.getElementById("access-name").value || "").trim();
+    const message = String(document.getElementById("access-msg").value || "").trim();
+    const btn = document.getElementById("access-submit");
+    btn.disabled = true;
+    try {
+      await api.submitAccessRequest(sb, { email, displayName, message });
+      toast("등록 요청이 접수되었습니다. 관리자에게 알림이 전달됩니다.");
+      close();
+    } catch (e) {
+      btn.disabled = false;
+      toast(e.message || "요청 실패", true);
     }
   });
 }
@@ -472,6 +555,7 @@ function shell(innerList, innerDetail, { fullWidth = false } = {}) {
     ["postings", `${Icon.posting({ size: 15 })} 공고`],
     ["applicants", `${Icon.users({ size: 15 })} 지원자`],
     ["talent", `${Icon.search({ size: 15 })} 인재검색`],
+    ["requirements", `${Icon.clipboard({ size: 15 })} 탐색요건`],
   ];
   syncHashFromTab();
   appEl.innerHTML = `
@@ -487,11 +571,12 @@ function shell(innerList, innerDetail, { fullWidth = false } = {}) {
             .join("")}
         </nav>
         <div class="userbox">
-          <button type="button" class="user-chip" id="btn-profile" title="프로필·알림 설정">
+          <div class="user-chip" title="${esc(staff?.email || "")}">
             <span class="user-name">${esc(who)}</span>
             <span class="user-meta">${esc([nick, role].filter(Boolean).join(" · "))}</span>
-          </button>
-          <button type="button" class="btn btn-ghost btn-sm" id="btn-logout">로그아웃</button>
+          </div>
+          <button type="button" class="icon-btn" id="btn-settings" title="설정" aria-label="설정">${Icon.settings({ size: 18 })}</button>
+          <button type="button" class="icon-btn" id="btn-logout" title="로그아웃" aria-label="로그아웃">${Icon.logOut({ size: 18 })}</button>
         </div>
       </header>
       <div class="main ${fullWidth ? "main-full" : ""}">
@@ -526,7 +611,7 @@ function shell(innerList, innerDetail, { fullWidth = false } = {}) {
     staff = null;
     renderLogin();
   });
-  document.getElementById("btn-profile")?.addEventListener("click", () => openProfileSettings());
+  document.getElementById("btn-settings")?.addEventListener("click", () => openProfileSettings());
   document.getElementById("detail-backdrop")?.addEventListener("click", () => closeDetailDrawer());
   bindPaneWheelRouting();
 }
@@ -690,7 +775,7 @@ function bindDetailClose() {
 }
 
 async function openProfileSettings() {
-  // 모든 역할(운영자·추천자·조회자) 공통: 별명·알림 설정
+  // 모든 역할(운영자·추천자·조회자) 공통: 별명·알림
   if (!staff || staff._unlinked || !staff.id) {
     toast("직원 프로필이 연결되지 않았습니다. 관리자에게 문의하세요.", true);
     return;
@@ -722,10 +807,10 @@ async function openProfileSettings() {
 
   root.innerHTML = `
     <div class="modal-backdrop" id="modal-backdrop">
-      <div class="modal-card" role="dialog" aria-labelledby="profile-title">
+      <div class="modal-card modal-card-wide" role="dialog" aria-labelledby="profile-title">
         <div class="detail-header" style="padding:0 0 12px;border:0;background:transparent">
           <div class="detail-header-text">
-            <h3 id="profile-title" style="margin:0">내 설정</h3>
+            <h3 id="profile-title" style="margin:0">설정</h3>
             <p class="muted" style="margin:4px 0 0">${esc(staff.email || "")} · ${esc(roleLabel(staff.role))}</p>
           </div>
           <button type="button" class="detail-close" id="pf-cancel" aria-label="닫기">${Icon.close({ size: 18 })}</button>
@@ -741,26 +826,43 @@ async function openProfileSettings() {
           </div>
           <div class="pf-field">
             <label>메일 알림</label>
-            <div class="notify-checks">
-              <label><input type="checkbox" id="pf-rt" ${rt ? "checked" : ""} /> 실시간 알림</label>
-              <label><input type="checkbox" id="pf-dg" ${dg ? "checked" : ""} /> 모닝 다이제스트 (07:30)</label>
+            <div class="toggle-list">
+              <label class="toggle-row">
+                <span>실시간 알림</span>
+                <input type="checkbox" class="toggle-input" id="pf-rt" ${rt ? "checked" : ""} />
+                <span class="toggle-ui" aria-hidden="true"></span>
+              </label>
+              <label class="toggle-row">
+                <span>모닝 다이제스트 (07:30)</span>
+                <input type="checkbox" class="toggle-input" id="pf-dg" ${dg ? "checked" : ""} />
+                <span class="toggle-ui" aria-hidden="true"></span>
+              </label>
             </div>
           </div>
           <div class="pf-field">
-            <label>알림 받을 공고 (진행 중 · 관심)</label>
-            <p class="pf-hint">선택하지 않으면 진행 중 공고 전체에 대해 알림을 받습니다. 둘 다 끄면 메일 미수신.</p>
-            <div class="interest-list" id="pf-interest">
+            <div class="pf-label-row">
+              <label>지원자 알림 · 진행 중 공고</label>
+              <div class="pf-actions-inline">
+                <button type="button" class="btn btn-ghost btn-sm" id="pf-all-on">전체 선택</button>
+                <button type="button" class="btn btn-ghost btn-sm" id="pf-all-off">전체 해제</button>
+              </div>
+            </div>
+            <p class="pf-hint">진행 중 공고만 표시됩니다. 모두 끄면 진행 중 전체 공고 알림. 채널을 끄면 메일 미수신. 인재 탐색 요건은 「탐색요건」 탭에서 관리합니다.</p>
+            <div class="interest-list interest-toggles" id="pf-interest">
               ${
                 openPostings.length
                   ? openPostings
-                      .map(
-                        (p) => `<label>
-                          <input type="checkbox" data-pid="${esc(p.id)}" ${interested.has(p.id) ? "checked" : ""} />
-                          <span>${esc(p.title || "(제목 없음)")}
+                      .map((p) => {
+                        const on = interested.size === 0 || interested.has(p.id);
+                        return `<label class="toggle-row interest-toggle">
+                          <span class="interest-title">
+                            ${esc(p.title || "(제목 없음)")}
                             <span class="muted"> · ${esc(platformLabel(p.platform))}</span>
                           </span>
-                        </label>`,
-                      )
+                          <input type="checkbox" class="toggle-input" data-pid="${esc(p.id)}" ${on ? "checked" : ""} />
+                          <span class="toggle-ui" aria-hidden="true"></span>
+                        </label>`;
+                      })
                       .join("")
                   : `<p class="muted">진행 중 공고가 없습니다.</p>`
               }
@@ -780,15 +882,26 @@ async function openProfileSettings() {
   document.getElementById("modal-backdrop")?.addEventListener("click", (e) => {
     if (e.target.id === "modal-backdrop") close();
   });
+  document.getElementById("pf-all-on")?.addEventListener("click", () => {
+    document.querySelectorAll("#pf-interest [data-pid]").forEach((el) => {
+      el.checked = true;
+    });
+  });
+  document.getElementById("pf-all-off")?.addEventListener("click", () => {
+    document.querySelectorAll("#pf-interest [data-pid]").forEach((el) => {
+      el.checked = false;
+    });
+  });
   document.getElementById("pf-save")?.addEventListener("click", async () => {
     try {
       const nickname = document.getElementById("pf-nick").value.trim();
       if (!nickname) return toast("별명을 입력하세요", true);
       const notifyRealtime = document.getElementById("pf-rt").checked;
       const notifyDigest = document.getElementById("pf-dg").checked;
-      const postingIds = [...document.querySelectorAll("#pf-interest [data-pid]:checked")].map((el) =>
-        el.getAttribute("data-pid"),
-      );
+      const boxes = [...document.querySelectorAll("#pf-interest [data-pid]")];
+      const checked = boxes.filter((el) => el.checked).map((el) => el.getAttribute("data-pid"));
+      const postingIds =
+        checked.length === 0 || checked.length === boxes.length ? [] : checked;
       staff = await api.updateMyStaffProfile(sb, staff.id, {
         nickname,
         displayName: document.getElementById("pf-display").value.trim(),
@@ -801,6 +914,209 @@ async function openProfileSettings() {
       await refresh(false);
     } catch (e) {
       toast(e.message, true);
+    }
+  });
+}
+
+function renderRequirementCards(requirements, myEmail) {
+  if (!requirements?.length) {
+    return `<p class="muted">등록된 탐색 요건이 없습니다.</p>`;
+  }
+  return requirements
+    .map((r) => {
+      const cat = r.category ? categoryShort(r.category) : "전체";
+      const who = r.creator?.display_name || r.creator?.nickname || "등록자";
+      const keywords = (r.keywords || "").trim();
+      const notify = (r.notify || []).slice().sort((a, b) => a.email.localeCompare(b.email));
+      const myNotify = notify.find((n) => String(n.email).toLowerCase() === myEmail);
+      return `<article class="req-card">
+        <div class="req-card-top">
+          <div>
+            <div class="req-title">${esc(r.title)}</div>
+            <div class="req-meta">${esc(cat)} · ${esc(who)}${
+              r.career_hint ? ` · ${esc(r.career_hint)}` : ""
+            }</div>
+          </div>
+          ${
+            r.created_by === staff?.id
+              ? `<button type="button" class="btn btn-ghost btn-sm" data-req-off="${esc(r.id)}">종료</button>`
+              : ""
+          }
+        </div>
+        ${keywords ? `<p class="req-keywords">${esc(keywords)}</p>` : ""}
+        <div class="req-notify">
+          ${notify
+            .map(
+              (n) => `<label class="toggle-row req-notify-row" title="${esc(n.email)}">
+                <span>${esc(n.email)}${n.staff_id ? "" : " (외부)"}</span>
+                <input type="checkbox" class="toggle-input" data-notify-id="${esc(n.id)}"
+                  ${n.notify_enabled ? "checked" : ""}
+                  ${
+                    String(n.email).toLowerCase() === myEmail || r.created_by === staff?.id
+                      ? ""
+                      : "disabled"
+                  } />
+                <span class="toggle-ui" aria-hidden="true"></span>
+              </label>`,
+            )
+            .join("")}
+        </div>
+        ${
+          myNotify
+            ? ""
+            : `<p class="pf-hint">이 요건 알림에 포함되어 있지 않습니다.</p>`
+        }
+      </article>`;
+    })
+    .join("");
+}
+
+function bindRequirementNotifyToggles(onDeactivate) {
+  document.querySelectorAll("[data-notify-id]").forEach((el) => {
+    el.addEventListener("change", async () => {
+      const id = el.getAttribute("data-notify-id");
+      try {
+        await api.setTalentRequirementNotifyEnabled(sb, id, el.checked);
+        toast(el.checked ? "알림 켜짐" : "알림 취소됨");
+      } catch (e) {
+        el.checked = !el.checked;
+        toast(e.message || "알림 변경 실패", true);
+      }
+    });
+  });
+  document.querySelectorAll("[data-req-off]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const id = btn.getAttribute("data-req-off");
+      if (!confirm("이 탐색 요건을 종료할까요?")) return;
+      try {
+        await api.deactivateTalentSearchRequirement(sb, id);
+        toast("요건 종료됨");
+        onDeactivate?.();
+        invalidateTabCache("requirements");
+        if (tab === "requirements") await refresh(true, { forceFetch: true });
+      } catch (e) {
+        toast(e.message || "종료 실패", true);
+      }
+    });
+  });
+}
+
+async function openTalentRequirementForm() {
+  if (!staff || staff._unlinked || !staff.id) {
+    toast("직원 프로필이 연결되지 않았습니다.", true);
+    return;
+  }
+  const root = document.getElementById("modal-root");
+  if (!root) return;
+
+  const catOpts = JOB_CATEGORIES.filter((c) => c.id !== "all")
+    .map((c) => `<option value="${esc(c.id)}">${esc(c.label)}</option>`)
+    .join("");
+
+  root.innerHTML = `
+    <div class="modal-backdrop" id="modal-backdrop">
+      <div class="modal-card modal-card-wide" role="dialog" aria-labelledby="req-title">
+        <div class="detail-header" style="padding:0 0 12px;border:0;background:transparent">
+          <div class="detail-header-text">
+            <h3 id="req-title" style="margin:0">인재 탐색 요건 등록</h3>
+            <p class="muted" style="margin:4px 0 0">필요한 인재 조건을 적으면 DB에 저장되고, 알림이 자동으로 켜집니다.</p>
+          </div>
+          <button type="button" class="detail-close" id="req-cancel" aria-label="닫기">${Icon.close({ size: 18 })}</button>
+        </div>
+        <div class="stack">
+          <div class="pf-field">
+            <label for="req-name">요건 제목 *</label>
+            <input id="req-name" placeholder="예: QA 경력 3년+ · Selenium" />
+          </div>
+          <div class="pf-field">
+            <label for="req-cat">분야</label>
+            <select id="req-cat">
+              <option value="">미지정</option>
+              ${catOpts}
+            </select>
+          </div>
+          <div class="pf-field">
+            <label for="req-keywords">필요 요건 / 키워드 *</label>
+            <textarea id="req-keywords" rows="3" placeholder="예: Selenium, Playwright, 모바일 QA, 즉시 출근 가능"></textarea>
+          </div>
+          <div class="pf-field">
+            <label for="req-career">경력 힌트</label>
+            <input id="req-career" placeholder="예: 3년 이상 / 신입 가능" />
+          </div>
+          <div class="pf-field">
+            <label>플랫폼</label>
+            <div class="notify-checks">
+              <label><input type="checkbox" id="req-jk" checked /> 잡코리아</label>
+              <label><input type="checkbox" id="req-sr" checked /> 사람인</label>
+            </div>
+          </div>
+          <div class="pf-field">
+            <label for="req-notes">메모</label>
+            <textarea id="req-notes" rows="2" placeholder="채용 배경, 우대사항 등"></textarea>
+          </div>
+          <div class="pf-field">
+            <label for="req-emails">같이 알림 받을 메일 (쉼표/줄바꿈)</label>
+            <textarea id="req-emails" rows="2" placeholder="예: hj.joo@tbell.co.kr, jonghyuk.kim@tbell.co.kr">${esc(
+              staff.email || "",
+            )}</textarea>
+            <p class="pf-hint">등록자 메일은 항상 포함됩니다. staff 메일이면 다이제스트 알림이 자동으로 켜집니다. 나중에 설정에서 끌 수 있습니다.</p>
+          </div>
+        </div>
+        <div class="actions" style="margin-top:16px;gap:8px">
+          <button type="button" class="btn btn-ghost btn-sm" id="req-back" style="width:auto">닫기</button>
+          <button type="button" class="btn btn-primary btn-sm" id="req-save" style="width:auto">등록</button>
+        </div>
+      </div>
+    </div>`;
+
+  const close = () => {
+    root.innerHTML = "";
+  };
+  document.getElementById("req-cancel")?.addEventListener("click", close);
+  document.getElementById("modal-backdrop")?.addEventListener("click", (e) => {
+    if (e.target.id === "modal-backdrop") close();
+  });
+  document.getElementById("req-back")?.addEventListener("click", () => {
+    close();
+  });
+  document.getElementById("req-save")?.addEventListener("click", async () => {
+    const title = document.getElementById("req-name").value.trim();
+    const keywords = document.getElementById("req-keywords").value.trim();
+    if (!title) return toast("요건 제목을 입력하세요", true);
+    if (!keywords) return toast("필요 요건/키워드를 입력하세요", true);
+    const platforms = [];
+    if (document.getElementById("req-jk").checked) platforms.push("jobkorea");
+    if (document.getElementById("req-sr").checked) platforms.push("saramin");
+    const rawEmails = document.getElementById("req-emails").value;
+    const notifyEmails = rawEmails
+      .split(/[\s,;]+/)
+      .map((e) => e.trim())
+      .filter((e) => e.includes("@"));
+    try {
+      await api.createTalentSearchRequirement(sb, {
+        createdBy: staff.id,
+        title,
+        category: document.getElementById("req-cat").value || null,
+        keywords,
+        platforms,
+        careerHint: document.getElementById("req-career").value.trim(),
+        notes: document.getElementById("req-notes").value.trim(),
+        notifyEmails,
+      });
+      toast("탐색 요건이 등록되었습니다");
+      close();
+      if (tab !== "requirements") await switchTab("requirements");
+      else {
+        invalidateTabCache("requirements");
+        await refresh(true, { forceFetch: true });
+      }
+    } catch (e) {
+      const msg = e.message || "등록 실패";
+      if (/relation|does not exist|schema cache/i.test(msg)) {
+        toast("DB 마이그레이션(0017) 적용 후 다시 시도하세요: " + msg, true);
+      } else {
+        toast(msg, true);
+      }
     }
   });
 }
@@ -1071,13 +1387,58 @@ function listTabTitle() {
     ? `${Icon.posting({ size: 18 })} 채용 공고`
     : tab === "applicants"
       ? `${Icon.users({ size: 18 })} 공고 지원자`
-      : `${Icon.search({ size: 18 })} 인재검색`;
+      : tab === "requirements"
+        ? `${Icon.clipboard({ size: 18 })} 탐색 요건`
+        : `${Icon.search({ size: 18 })} 인재검색`;
 }
 
 function listCardsHtml() {
   if (tab === "postings") return renderPostingCards();
   if (tab === "applicants") return renderApplicantsCards();
+  if (tab === "requirements") return renderRequirementListCards();
   return renderTalentCards();
+}
+
+function discoverySourceLabel(type) {
+  if (type === "requirement") return "요건";
+  if (type === "posting") return "공고";
+  if (type === "manual") return "수동";
+  if (type === "default_pool") return "기본";
+  return "";
+}
+
+function renderRequirementListCards() {
+  if (!rows.length) {
+    return `<div class="empty">등록된 탐색 요건이 없습니다. 우측 상단에서 등록하세요.</div>`;
+  }
+  return `<div class="card-list talent-cards">${pageRows()
+    .map((r) => {
+      const sel = selected?.id === r.id ? "selected" : "";
+      const cat = r.category ? categoryShort(r.category) : "전체";
+      const who = r.creator?.display_name || r.creator?.nickname || "—";
+      const notifyOn = (r.notify || []).filter((n) => n.notify_enabled).length;
+      const plats = (r.platforms || [])
+        .map((p) => platformLabel(p))
+        .filter(Boolean)
+        .join(" · ");
+      return `<article class="candidate-card talent-card ${sel}" data-id="${esc(r.id)}">
+        <div class="card-top">
+          <div class="card-top-main">
+            <div class="card-name-row">
+              <span class="card-name">${esc(r.title)}</span>
+              ${r.is_active === false ? `<span class="badge blocked">종료</span>` : `<span class="badge new">활성</span>`}
+            </div>
+            <div class="card-sub card-sub-wrap">${esc(cat)} · ${esc(who)}${plats ? ` · ${esc(plats)}` : ""}</div>
+            ${r.keywords ? `<div class="card-headline-line">${esc(r.keywords)}</div>` : ""}
+          </div>
+          <div class="card-top-side">
+            <span class="meta-pill stage">알림 ${notifyOn}</span>
+            ${r.career_hint ? `<span class="meta-pill cat">${esc(r.career_hint)}</span>` : ""}
+          </div>
+        </div>
+      </article>`;
+    })
+    .join("")}</div>`;
 }
 
 function renderPagination() {
@@ -1313,7 +1674,11 @@ function renderPostingApplicantsInDetail() {
 function listContentHtml() {
   const body = `${listToolbar(listTabTitle(), {
     showPlatform: tab === "talent",
-  })}${listCardsHtml()}${renderPagination()}`;
+  })}${
+    tab === "requirements"
+      ? `<div class="req-toolbar"><button type="button" class="btn btn-primary btn-sm" id="btn-req-new">${Icon.clipboard({ size: 14 })} 요건 등록</button></div>`
+      : ""
+  }${listCardsHtml()}${renderPagination()}`;
   if (tab === "talent") {
     return `<div class="talent-layout">${talentCategoryNav()}<div class="talent-main">${body}</div></div>`;
   }
@@ -1336,6 +1701,7 @@ function paintListPane() {
   bindTalentCategoryNav();
   bindPostingStatusNav();
   bindApplicantSideNav();
+  document.getElementById("btn-req-new")?.addEventListener("click", () => openTalentRequirementForm());
   if (selected?.id) {
     document.querySelector(`.candidate-card[data-id="${selected.id}"]`)?.classList.add("selected");
   }
@@ -1747,34 +2113,36 @@ function renderDashboard() {
 
   return `
     <div class="dash-page">
-      <div class="toolbar">
+      <div class="toolbar dash-toolbar">
         <h2>대시보드</h2>
-        <button type="button" class="btn btn-ghost btn-sm" id="btn-refresh">새로고침</button>
+        <div class="dash-toolbar-right">
+          <nav class="dash-links" aria-label="채용 플랫폼">
+            <a class="dash-link" href="https://www.jobkorea.co.kr/Corp/Main" target="_blank" rel="noopener">잡코리아 ${Icon.external({ size: 12 })}</a>
+            <a class="dash-link" href="https://www.saramin.co.kr/zf_user/memcom/main" target="_blank" rel="noopener">사람인 ${Icon.external({ size: 12 })}</a>
+          </nav>
+          <button type="button" class="btn btn-ghost btn-sm" id="btn-refresh">새로고침</button>
+        </div>
       </div>
-      <div class="dash-links">
-        <a class="dash-link" href="https://www.jobkorea.co.kr/Corp/Main" target="_blank" rel="noopener">잡코리아 기업회원 ${Icon.external({ size: 13 })}</a>
-        <a class="dash-link" href="https://www.saramin.co.kr/zf_user/memcom/main" target="_blank" rel="noopener">사람인 기업회원 ${Icon.external({ size: 13 })}</a>
-      </div>
-      <div class="dash-kpis">
-        <button type="button" class="dash-card" data-jump="applicants">
-          <div class="dash-label">어제 지원자</div>
-          <div class="dash-num">${s.applicantsYesterday ?? 0}</div>
-          <div class="dash-sub muted">${esc(s.yesterdayLabel || "전일")}</div>
+      <div class="dash-kpis" role="group" aria-label="요약 지표">
+        <button type="button" class="dash-kpi" data-jump="applicants">
+          <span class="dash-label">어제</span>
+          <span class="dash-num">${s.applicantsYesterday ?? 0}</span>
+          <span class="dash-sub muted">${esc(s.yesterdayLabel || "전일")}</span>
         </button>
-        <button type="button" class="dash-card" data-jump="applicants">
-          <div class="dash-label">이번주 지원자</div>
-          <div class="dash-num">${s.applicantsThisWeek ?? 0}</div>
-          <div class="dash-sub muted">${esc(s.weekLabel || "월–오늘")}</div>
+        <button type="button" class="dash-kpi" data-jump="applicants">
+          <span class="dash-label">이번주</span>
+          <span class="dash-num">${s.applicantsThisWeek ?? 0}</span>
+          <span class="dash-sub muted">${esc(s.weekLabel || "월–오늘")}</span>
         </button>
-        <button type="button" class="dash-card" data-jump="talent">
-          <div class="dash-label">인재검색</div>
-          <div class="dash-num">${s.talents}</div>
-          <div class="dash-sub muted">누적</div>
+        <button type="button" class="dash-kpi" data-jump="talent">
+          <span class="dash-label">인재</span>
+          <span class="dash-num">${s.talents}</span>
+          <span class="dash-sub muted">누적</span>
         </button>
-        <button type="button" class="dash-card" data-jump="postings">
-          <div class="dash-label">공고</div>
-          <div class="dash-num">${s.postings}</div>
-          <div class="dash-sub muted">누적</div>
+        <button type="button" class="dash-kpi" data-jump="postings">
+          <span class="dash-label">공고</span>
+          <span class="dash-num">${s.postings}</span>
+          <span class="dash-sub muted">누적</span>
         </button>
       </div>
       <div class="dash-charts dash-charts-single">
@@ -2217,40 +2585,57 @@ function renderApplicantsCards() {
 
 function renderTalentCards() {
   if (!rows.length) return `<div class="empty">인재검색 후보가 없습니다.</div>`;
-  return `<div class="card-list">${pageRows()
+  return `<div class="card-list talent-cards">${pageRows()
     .map((r) => {
       const sel = selected?.id === r.id ? "selected" : "";
       const meta = r.profile_meta || {};
       const name = r.candidate?.name || meta.name || "(이름 없음)";
-      const headline = r.headline || "";
+      const headline = String(r.headline || meta.roles?.[0] || "").trim();
       const badges = [
         isNew(r.sourced_at) ? `<span class="badge new">NEW</span>` : "",
         !r.is_active ? `<span class="badge blocked">블락</span>` : "",
-      ].join(" ");
-      const subParts = [meta.genderAge, meta.careerText].filter(Boolean);
+      ].join("");
+      const infoLine = [meta.genderAge, meta.careerText, meta.jobStatus].filter(Boolean).join(" · ");
+      const skillBits = [...(meta.skills || []), ...(meta.roles || [])]
+        .map((s) => String(s || "").trim())
+        .filter(Boolean)
+        .slice(0, 5);
+      const cat = categoryShort(resolveTalentCategory(r));
+      const srcType = r.primary_source_type || "";
+      const srcBadge = discoverySourceLabel(srcType);
+      const srcText = r.primary_source_label || "";
 
-      return `<article class="candidate-card ${sel}" data-id="${esc(r.id)}">
+      return `<article class="candidate-card talent-card ${sel}" data-id="${esc(r.id)}">
         <div class="card-top">
           <div class="card-top-main">
-            ${headline ? `<p class="card-headline">${esc(headline)}</p>` : ""}
             <div class="card-name-row">
               <span class="card-name">${esc(name)}</span>
               ${badges}
+              ${srcBadge ? `<span class="badge source-${esc(srcType)}" title="${esc(srcText)}">${esc(srcBadge)}</span>` : ""}
             </div>
-            ${subParts.length ? `<div class="card-sub">${esc(subParts.join(" · "))}</div>` : ""}
+            <div class="card-sub card-sub-wrap">${esc(infoLine || "—")}${
+              srcText ? ` · <span class="src-hint">${esc(srcText)}</span>` : ""
+            }</div>
+            ${headline ? `<div class="card-headline-line">${esc(headline)}</div>` : ""}
           </div>
           <div class="card-top-side">
             <span class="meta-pill stage">${esc(proposalLabel(r.proposal_status))}</span>
-            <span class="meta-pill cat">${esc(categoryShort(resolveTalentCategory(r)))}</span>
-            ${meta.company ? `<span class="card-salary">${esc(meta.company)}</span>` : ""}
+            <span class="meta-pill cat">${esc(cat)}</span>
           </div>
         </div>
-        <div class="card-meta-row">
-          <span class="meta-pill platform" title="${esc(platformLabel(r.platform))}">${platformIcon(r.platform)}</span>
+        <div class="talent-footer-row">
+          <span class="posting-plat" title="${esc(platformLabel(r.platform))}">${platformIcon(r.platform)}</span>
+          ${
+            meta.company
+              ? `<span class="card-posting">${esc(meta.company)}</span>`
+              : `<span class="card-posting muted">${esc(platformLabel(r.platform))}</span>`
+          }
+          ${
+            skillBits.length
+              ? `<span class="talent-skill-inline">${esc(skillBits.join(" · "))}</span>`
+              : ""
+          }
         </div>
-        ${renderChips(meta.badges, "badge-chip")}
-        ${renderChips(meta.roles?.slice(0, 6))}
-        ${renderChips(meta.skills?.slice(0, 8))}
       </article>`;
     })
     .join("")}</div>`;
@@ -2288,6 +2673,7 @@ async function renderDetail() {
 
   if (tab === "postings") await renderPostingDetail(pane);
   else if (tab === "applicants") await renderApplicantDetail(pane);
+  else if (tab === "requirements") await renderRequirementDetail(pane);
   else await renderTalentDetail(pane);
 
   bindDetailClose();
@@ -2688,16 +3074,53 @@ function bindApplicantActions(r, candidateId) {
   });
 }
 
+async function renderRequirementDetail(pane) {
+  const r = selected;
+  if (!r) return;
+  const myEmail = String(staff?.email || "").toLowerCase();
+  const cat = r.category ? categoryShort(r.category) : "미지정";
+  const who = r.creator?.display_name || r.creator?.nickname || "—";
+  const plats = (r.platforms || []).map((p) => platformLabel(p)).join(", ") || "전체";
+  const notifyHtml = renderRequirementCards([r], myEmail);
+
+  const body = [
+    detailFacts([
+      ["분야", esc(cat)],
+      ["등록자", esc(who)],
+      ["플랫폼", esc(plats)],
+      ["경력 힌트", esc(r.career_hint || "—")],
+      ["상태", r.is_active === false ? "종료" : "활성"],
+      ["등록일", esc(fmtDate(r.created_at))],
+    ]),
+    detailSection("필요 요건", `<p class="req-keywords">${esc(r.keywords || "—")}</p>`, {
+      icon: Icon.search({ size: 16 }),
+    }),
+    r.notes
+      ? detailSection("메모", `<p>${esc(r.notes)}</p>`, { icon: Icon.file({ size: 16 }) })
+      : "",
+    detailSection("알림 수신", notifyHtml, { icon: Icon.mail({ size: 16 }) }),
+  ].join("");
+
+  pane.innerHTML = wrapDetail(r.title || "(요건)", "", body, {
+    badges: r.is_active === false ? `<span class="badge blocked">종료</span>` : `<span class="badge new">활성</span>`,
+  });
+  bindRequirementNotifyToggles(async () => {
+    invalidateTabCache("requirements");
+    await refresh(false, { forceFetch: true });
+  });
+}
+
 async function renderTalentDetail(pane) {
   const r = selected;
   const candidateId = r.candidate?.id;
   const meta = r.profile_meta || {};
   const name = r.candidate?.name || "(이름 없음)";
 
-  const [tags, history, docs] = await Promise.all([
+  const [tags, history, docs, discoveries] = await Promise.all([
     api.listTags(sb, "talent_pool", r.id),
     candidateId ? api.listStatusHistory(sb, candidateId) : Promise.resolve([]),
     api.listDocuments(sb, { candidateId, talentPoolId: r.id }),
+    api.listTalentDiscoveries(sb, r.id).catch(() => []),
   ]);
 
   const headerBadges = [
@@ -2705,20 +3128,50 @@ async function renderTalentDetail(pane) {
     `<span class="stage-pill">${esc(proposalLabel(r.proposal_status))}</span>`,
     isNew(r.sourced_at) ? `<span class="badge new">NEW</span>` : "",
     !r.is_active ? `<span class="badge blocked">블락</span>` : "",
+    discoverySourceLabel(r.primary_source_type)
+      ? `<span class="badge source-${esc(r.primary_source_type || "")}">${esc(discoverySourceLabel(r.primary_source_type))}</span>`
+      : "",
   ]
     .filter(Boolean)
     .join("");
   const subBits = [r.headline, meta.genderAge, meta.careerText].filter(Boolean).map(esc).join(" · ");
+
+  const discoveryHtml =
+    discoveries.length > 0
+      ? `<ul class="timeline">${discoveries
+          .map((d) => {
+            const kind = discoverySourceLabel(d.source_type) || d.source_type;
+            const title =
+              d.source_label ||
+              d.requirement?.title ||
+              d.posting?.title ||
+              "—";
+            const extra =
+              d.source_type === "requirement" && d.requirement?.keywords
+                ? ` · ${d.requirement.keywords}`
+                : d.source_type === "posting" && d.posting?.platform
+                  ? ` · ${platformLabel(d.posting.platform)}`
+                  : "";
+            return `<li><b>${esc(kind)}</b> · ${esc(title)}${esc(extra)} · ${esc(
+              new Date(d.discovered_at).toLocaleString("ko-KR"),
+            )}</li>`;
+          })
+          .join("")}</ul>`
+      : `<p class="muted">탐색 출처 이력이 없습니다.${
+          r.primary_source_label ? ` 대표: ${esc(r.primary_source_label)}` : ""
+        }</p>`;
 
   const profileHtml = [
     detailFacts([
       ["현재 회사", esc(meta.company || "—")],
       ["경력", esc(meta.careerText || "—")],
       ["수집일", esc(fmtDate(r.sourced_at))],
+      ["대표 출처", esc(discoverySourceLabel(r.primary_source_type) || "—")],
     ]),
     renderChips(meta.roles),
     renderChips(meta.skills),
     renderChips(meta.badges, "badge-chip"),
+    detailSection("탐색 출처", discoveryHtml, { icon: Icon.flag({ size: 16 }) }),
     detailSection(
       "서류",
       renderDocuments(docs),
@@ -2932,14 +3385,38 @@ async function ensureTabData(force = false) {
   }
 
   // talent — 전체 로드 후 클라이언트에서 플랫폼/분야 필터
-  const hit = tabCache.talent;
-  if (!force && cacheFresh(hit) && hit.q === filterQ) {
-    rows = hit.rows;
+  if (tab === "talent") {
+    const hit = tabCache.talent;
+    if (!force && cacheFresh(hit) && hit.q === filterQ) {
+      rows = hit.rows;
+      return;
+    }
+    rows = await api.listTalents(sb, { q: filterQ, platform: "", limit: 500 });
+    appDocFlags = new Map();
+    tabCache.talent = { rows, q: filterQ, platform: "", at: Date.now() };
     return;
   }
-  rows = await api.listTalents(sb, { q: filterQ, platform: "", limit: 500 });
+
+  // requirements
+  const hitReq = tabCache.requirements;
+  if (!force && cacheFresh(hitReq) && hitReq.q === filterQ) {
+    rows = hitReq.rows;
+    return;
+  }
+  let reqs = await api.listTalentSearchRequirements(sb, { activeOnly: false });
+  const needle = filterQ.trim().toLowerCase();
+  if (needle) {
+    reqs = reqs.filter((r) =>
+      [r.title, r.keywords, r.notes, r.career_hint, r.creator?.display_name]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(needle),
+    );
+  }
+  rows = reqs;
   appDocFlags = new Map();
-  tabCache.talent = { rows, q: filterQ, platform: "", at: Date.now() };
+  tabCache.requirements = { rows, q: filterQ, at: Date.now() };
 }
 
 function paintNavActive() {

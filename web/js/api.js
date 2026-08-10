@@ -471,6 +471,7 @@ export async function listTalents(sb, { q = "", platform = "", limit = 500 } = {
       `
       id, platform, profile_url, profile_ref, headline, summary_text, profile_meta,
       search_condition, proposal_status, is_active, sourced_at, created_at, category,
+      primary_source_type, primary_requirement_id, primary_posting_id, primary_source_label,
       candidate:candidates ( id, name, email, phone, is_active )
     `,
     )
@@ -481,11 +482,38 @@ export async function listTalents(sb, { q = "", platform = "", limit = 500 } = {
 
   if (platform) query = query.eq("platform", platform);
   const { data, error } = await query;
-  if (error) throw error;
+  if (error) {
+    // primary_* 컬럼 미적용 환경 폴백
+    if (/primary_source|column/i.test(error.message || "")) {
+      const fallback = await sb
+        .from("talent_pool_candidates")
+        .select(
+          `
+          id, platform, profile_url, profile_ref, headline, summary_text, profile_meta,
+          search_condition, proposal_status, is_active, sourced_at, created_at, category,
+          candidate:candidates ( id, name, email, phone, is_active )
+        `,
+        )
+        .eq("is_active", true)
+        .order("sourced_at", { ascending: false, nullsFirst: false })
+        .order("created_at", { ascending: false })
+        .limit(limit);
+      if (platform) {
+        /* platform filter already applied above when possible */
+      }
+      if (fallback.error) throw fallback.error;
+      return filterTalentRows(fallback.data ?? [], q);
+    }
+    throw error;
+  }
 
-  const needle = q.trim().toLowerCase();
-  if (!needle) return data ?? [];
-  return (data ?? []).filter((row) => {
+  return filterTalentRows(data ?? [], q);
+}
+
+function filterTalentRows(rows, q) {
+  const needle = String(q || "").trim().toLowerCase();
+  if (!needle) return rows;
+  return rows.filter((row) => {
     const hay = [
       row.candidate?.name,
       row.headline,
@@ -493,12 +521,31 @@ export async function listTalents(sb, { q = "", platform = "", limit = 500 } = {
       row.platform,
       row.proposal_status,
       row.search_condition,
+      row.primary_source_label,
+      row.primary_source_type,
     ]
       .filter(Boolean)
       .join(" ")
       .toLowerCase();
     return hay.includes(needle);
   });
+}
+
+export async function listTalentDiscoveries(sb, talentPoolId) {
+  const { data, error } = await sb
+    .from("talent_discovery_sources")
+    .select(
+      `id, source_type, requirement_id, posting_id, source_label, platform, discovered_at,
+       requirement:talent_search_requirements(id, title, keywords),
+       posting:job_postings(id, title, platform)`,
+    )
+    .eq("talent_pool_id", talentPoolId)
+    .order("discovered_at", { ascending: false });
+  if (error) {
+    if (/relation|does not exist|schema cache/i.test(error.message || "")) return [];
+    throw error;
+  }
+  return data ?? [];
 }
 
 export async function listTags(sb, targetType, targetId) {
@@ -780,4 +827,168 @@ export async function listDocuments(sb, { candidateId, applicationId, talentPool
 
   rows.sort((a, b) => new Date(b.collected_at) - new Date(a.collected_at));
   return rows;
+}
+
+/** 인재 탐색 요건 목록 (활성 우선) */
+export async function listTalentSearchRequirements(sb, { activeOnly = true } = {}) {
+  let query = sb
+    .from("talent_search_requirements")
+    .select(
+      `id, title, category, keywords, platforms, career_hint, notes, is_active, created_at, updated_at, created_by,
+       notify:talent_search_requirement_notify(id, email, staff_id, notify_enabled, created_at)`,
+    )
+    .order("created_at", { ascending: false });
+  if (activeOnly) query = query.eq("is_active", true);
+  const { data, error } = await query;
+  if (error) throw error;
+  const rows = data ?? [];
+  const creatorIds = [...new Set(rows.map((r) => r.created_by).filter(Boolean))];
+  /** @type {Map<string, any>} */
+  const creators = new Map();
+  if (creatorIds.length) {
+    const { data: staffRows } = await sb
+      .from("staff_profiles")
+      .select("id, nickname, display_name, email")
+      .in("id", creatorIds);
+    for (const s of staffRows || []) creators.set(s.id, s);
+  }
+  return rows.map((r) => ({ ...r, creator: creators.get(r.created_by) || null }));
+}
+
+/**
+ * 탐색 요건 등록 + 알림 수신자.
+ * creatorEmail 은 자동 포함(notify on). extraEmails 도 기본 on.
+ * staff 이메일이면 digest 알림도 켠다.
+ */
+export async function createTalentSearchRequirement(
+  sb,
+  {
+    createdBy,
+    title,
+    category = null,
+    keywords = "",
+    platforms = [],
+    careerHint = "",
+    notes = "",
+    notifyEmails = [],
+  },
+) {
+  const { data: req, error } = await sb
+    .from("talent_search_requirements")
+    .insert({
+      created_by: createdBy,
+      title: String(title || "").trim(),
+      category: category || null,
+      keywords: String(keywords || "").trim() || null,
+      platforms: Array.isArray(platforms) ? platforms.filter(Boolean) : [],
+      career_hint: String(careerHint || "").trim() || null,
+      notes: String(notes || "").trim() || null,
+      is_active: true,
+    })
+    .select("id, title, category, keywords, platforms, career_hint, notes, is_active, created_at, created_by")
+    .single();
+  if (error) throw error;
+
+  const emails = [
+    ...new Set(
+      (notifyEmails || [])
+        .map((e) => String(e || "").trim().toLowerCase())
+        .filter((e) => e.includes("@")),
+    ),
+  ];
+
+  // 등록자 이메일 자동 포함
+  const { data: creator } = await sb
+    .from("staff_profiles")
+    .select("id, email")
+    .eq("id", createdBy)
+    .maybeSingle();
+  if (creator?.email) emails.unshift(String(creator.email).trim().toLowerCase());
+
+  const uniqueEmails = [...new Set(emails)];
+  if (uniqueEmails.length) {
+    const notifyRows = [];
+    for (const email of uniqueEmails) {
+      const { data: hit } = await sb
+        .from("staff_profiles")
+        .select("id, email")
+        .ilike("email", email)
+        .maybeSingle();
+      notifyRows.push({
+        requirement_id: req.id,
+        email,
+        staff_id: hit?.id ?? null,
+        notify_enabled: true,
+      });
+    }
+    const { error: nErr } = await sb.from("talent_search_requirement_notify").insert(notifyRows);
+    if (nErr) throw nErr;
+
+    // 참조된 staff 는 다이제스트 알림 자동 on (실시간 설정은 유지)
+    const staffIds = [...new Set(notifyRows.map((r) => r.staff_id).filter(Boolean))];
+    for (const sid of staffIds) {
+      const { data: st } = await sb
+        .from("staff_profiles")
+        .select("id, notify_digest, notify_realtime, notify_pref")
+        .eq("id", sid)
+        .maybeSingle();
+      if (!st || st.notify_digest) continue;
+      const patch = { notify_digest: true };
+      if (st.notify_pref === "none") {
+        patch.notify_pref = st.notify_realtime ? "realtime" : "digest";
+      }
+      await sb.from("staff_profiles").update(patch).eq("id", sid);
+    }
+  }
+
+  return req;
+}
+
+export async function setTalentRequirementNotifyEnabled(sb, notifyId, enabled) {
+  const { data, error } = await sb
+    .from("talent_search_requirement_notify")
+    .update({ notify_enabled: Boolean(enabled) })
+    .eq("id", notifyId)
+    .select("id, email, notify_enabled, requirement_id")
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deactivateTalentSearchRequirement(sb, requirementId) {
+  const { data, error } = await sb
+    .from("talent_search_requirements")
+    .update({ is_active: false, updated_at: new Date().toISOString() })
+    .eq("id", requirementId)
+    .select("id, is_active")
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+/** email 로 staff 조회 (참조 메일 등록용) */
+export async function findStaffByEmail(sb, email) {
+  const e = String(email || "").trim().toLowerCase();
+  if (!e) return null;
+  const { data, error } = await sb
+    .from("staff_profiles")
+    .select("id, email, nickname, display_name, role, is_active")
+    .ilike("email", e)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+/** 로그인 화면 — 정보 등록 요청 (anon insert) */
+export async function submitAccessRequest(sb, { email, displayName = "", message = "" }) {
+  const row = {
+    email: String(email || "").trim().toLowerCase(),
+    display_name: String(displayName || "").trim() || null,
+    message: String(message || "").trim() || null,
+    status: "pending",
+  };
+  if (!row.email.includes("@")) throw new Error("이메일을 확인하세요");
+  const { data, error } = await sb.from("access_requests").insert(row).select("id").single();
+  if (error) throw error;
+  return data;
 }

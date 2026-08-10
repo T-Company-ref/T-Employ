@@ -40,14 +40,14 @@ export const TAG_LABELS = {
   flag: "주의",
 };
 
-/** staff_profiles.role */
+/** staff_profiles.role — 운영자 / 추천자 / 조회자 (레거시는 표시만 매핑) */
 export const ROLE_LABELS = {
   operator: "운영자",
-  recruiter: "채용담당",
-  executive: "임원",
   recommender: "추천자",
   viewer: "조회자",
-  staff: "직원",
+  recruiter: "운영자", // 레거시 → 운영자
+  executive: "추천자", // 레거시 → 추천자
+  staff: "조회자", // 레거시 → 조회자
 };
 
 /** staff_profiles.notify_pref (레거시) */
@@ -109,10 +109,12 @@ export function notifyPrefLabel(p) {
   return label(NOTIFY_PREF_LABELS, p, p || "—");
 }
 
-/** 역할별 UI 권한 */
+/** 역할별 UI 권한 — 운영자 / 추천자 / 조회자 */
 export function staffCaps(role) {
   const r = role || "viewer";
+  // recruiter는 레거시 운영자 동등
   const manage = r === "operator" || r === "recruiter";
+  // executive는 레거시 추천자 동등
   const recommend = manage || r === "recommender" || r === "executive";
   return {
     canRecommend: recommend,
