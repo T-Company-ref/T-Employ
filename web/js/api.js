@@ -26,13 +26,25 @@ export async function signIn(sb, email, password) {
   return data;
 }
 
+/** 운영 웹 URL — 로컬/미리보기에서도 재설정 랜딩은 GitHub Pages 고정 */
+export function appRedirectUrl() {
+  return "https://t-company-ref.github.io/T-Employ/";
+}
+
 /** 비밀번호 재설정 메일 (Auth 계정 있을 때만 실제 발송). 존재 여부는 호출부에서 노출하지 말 것. */
 export async function requestPasswordRecovery(sb, email) {
   const e = String(email || "").trim().toLowerCase();
   if (!e.includes("@")) throw new Error("이메일을 확인하세요");
-  const redirectTo =
-    typeof window !== "undefined" ? `${window.location.origin}${window.location.pathname}` : undefined;
-  const { error } = await sb.auth.resetPasswordForEmail(e, redirectTo ? { redirectTo } : undefined);
+  const { error } = await sb.auth.resetPasswordForEmail(e, { redirectTo: appRedirectUrl() });
+  if (error) throw error;
+  return true;
+}
+
+/** 복구 세션에서 새 비밀번호 저장 */
+export async function updatePassword(sb, password) {
+  const pw = String(password || "");
+  if (pw.length < 6) throw new Error("비밀번호는 6자 이상이어야 합니다");
+  const { error } = await sb.auth.updateUser({ password: pw });
   if (error) throw error;
   return true;
 }

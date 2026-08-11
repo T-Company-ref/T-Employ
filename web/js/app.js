@@ -385,6 +385,54 @@ function renderLogin(errorMsg = "") {
   });
 }
 
+function openPasswordResetForm() {
+  const root = document.getElementById("modal-root") || (() => {
+    const el = document.createElement("div");
+    el.id = "modal-root";
+    document.body.appendChild(el);
+    return el;
+  })();
+  root.innerHTML = `
+    <div class="modal-backdrop" id="modal-backdrop">
+      <div class="modal-card" role="dialog" aria-labelledby="pw-title">
+        <div class="detail-header" style="padding:0 0 12px;border:0;background:transparent">
+          <div class="detail-header-text">
+            <h3 id="pw-title" style="margin:0">새 비밀번호 설정</h3>
+            <p class="muted" style="margin:4px 0 0">메일 링크로 인증되었습니다. 새 비밀번호를 입력하세요.</p>
+          </div>
+        </div>
+        <label class="field">
+          <span>새 비밀번호</span>
+          <input type="password" id="pw-new" autocomplete="new-password" minlength="6" />
+        </label>
+        <label class="field" style="margin-top:10px">
+          <span>비밀번호 확인</span>
+          <input type="password" id="pw-confirm" autocomplete="new-password" minlength="6" />
+        </label>
+        <div class="modal-actions" style="margin-top:16px">
+          <button type="button" class="btn btn-primary" id="pw-save">저장 후 로그인</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById("pw-save")?.addEventListener("click", async () => {
+    const a = String(document.getElementById("pw-new")?.value || "");
+    const b = String(document.getElementById("pw-confirm")?.value || "");
+    if (a.length < 6) return toast("비밀번호는 6자 이상이어야 합니다", true);
+    if (a !== b) return toast("비밀번호가 일치하지 않습니다", true);
+    const btn = document.getElementById("pw-save");
+    btn.disabled = true;
+    try {
+      await api.updatePassword(sb, a);
+      root.innerHTML = "";
+      toast("비밀번호가 변경되었습니다");
+      await bootApp();
+    } catch (e) {
+      btn.disabled = false;
+      toast(e.message || "변경 실패", true);
+    }
+  });
+}
+
 function openTestAccountHint() {
   const root = document.getElementById("modal-root") || (() => {
     const el = document.createElement("div");
@@ -461,7 +509,7 @@ function openAccessRequestForm() {
     btn.disabled = true;
     try {
       await api.submitAccessRequest(sb, { email, displayName: "", message: "" });
-      toast("요청이 접수되었습니다. 이미 계정이면 비밀번호 재설정 메일이 곧 발송됩니다.");
+      toast("요청이 접수되었습니다. 이미 계정이면 약 20초 안에 재설정 메일이 발송됩니다.");
       close();
     } catch (e) {
       btn.disabled = false;
@@ -3640,16 +3688,28 @@ async function main() {
     return;
   }
 
+  let recoveryPending = false;
+  sb.auth.onAuthStateChange((event, sess) => {
+    if (event === "PASSWORD_RECOVERY") {
+      recoveryPending = true;
+      openPasswordResetForm();
+      return;
+    }
+    if (!sess && !recoveryPending) renderLogin();
+  });
+
   const session = await api.getSession(sb);
   if (!session) {
     renderLogin();
     return;
   }
+  // recovery 해시로 세션이 잡힌 경우 폼 먼저
+  const hash = String(location.hash || "");
+  if (/type=recovery/i.test(hash) || /type=recovery/i.test(location.search || "")) {
+    openPasswordResetForm();
+    return;
+  }
   await bootApp();
-
-  sb.auth.onAuthStateChange((_event, sess) => {
-    if (!sess) renderLogin();
-  });
 }
 
 main().catch((err) => {
