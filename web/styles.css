@@ -76,41 +76,67 @@ a:hover { text-decoration: underline; }
   color: var(--muted);
   font-size: 0.95rem;
 }
-.login-demo {
-  margin-top: 18px;
-  padding: 12px 14px;
-  border: 1px dashed var(--line);
-  border-radius: 10px;
-  background: #f8fafc;
+.login-help {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+.login-help-fab {
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-lg);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+.login-help-fab:hover {
+  background: var(--brand-soft);
+  color: var(--brand);
+  border-color: #bfdbfe;
+}
+.login-help-menu {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-width: 180px;
+  padding: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow-lg);
 }
-.login-demo-title {
-  font-size: 0.78rem;
-  font-weight: 700;
-  color: var(--muted);
-  letter-spacing: 0.02em;
+.login-help-menu[hidden] {
+  display: none !important;
 }
-.login-demo-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: 0.86rem;
-  color: var(--text);
+.login-help-item {
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  border-radius: 10px;
+  padding: 10px 12px;
+  text-align: left;
+  cursor: pointer;
+  font-size: 0.9rem;
 }
-.login-demo-row code {
+.login-help-item:hover {
+  background: var(--brand-soft);
+  border-color: #bfdbfe;
+}
+.login-id-code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.84rem;
-  background: #fff;
+  font-size: 0.95rem;
+  background: var(--surface-2);
   border: 1px solid var(--line);
   border-radius: 6px;
-  padding: 3px 8px;
-}
-.login-demo .btn {
-  align-self: flex-start;
-  margin-top: 2px;
+  padding: 2px 8px;
 }
 .field { display: grid; gap: 8px; margin-bottom: 16px; }
 .field label { font-size: 0.82rem; color: var(--muted); font-weight: 500; }

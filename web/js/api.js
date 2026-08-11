@@ -26,6 +26,17 @@ export async function signIn(sb, email, password) {
   return data;
 }
 
+/** 비밀번호 재설정 메일 (Auth 계정 있을 때만 실제 발송). 존재 여부는 호출부에서 노출하지 말 것. */
+export async function requestPasswordRecovery(sb, email) {
+  const e = String(email || "").trim().toLowerCase();
+  if (!e.includes("@")) throw new Error("이메일을 확인하세요");
+  const redirectTo =
+    typeof window !== "undefined" ? `${window.location.origin}${window.location.pathname}` : undefined;
+  const { error } = await sb.auth.resetPasswordForEmail(e, redirectTo ? { redirectTo } : undefined);
+  if (error) throw error;
+  return true;
+}
+
 export async function signOut(sb) {
   const { error } = await sb.auth.signOut();
   if (error) throw error;
@@ -304,11 +315,11 @@ export async function getDashboardStats(sb, { fromKey, toKey } = {}) {
       sb
         .from("applications")
         .select(
-          `id, applied_at, current_stage, platform,
+          `id, applied_at, created_at, alerted_at, current_stage, platform,
            candidate:candidates ( name ),
            posting:job_postings ( title )`,
         )
-        .order("applied_at", { ascending: false })
+        .order("created_at", { ascending: false })
         .limit(10),
       sb
         .from("applications")

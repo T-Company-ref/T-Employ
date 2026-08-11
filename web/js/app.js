@@ -1,6 +1,6 @@
 import { configReady, createClient } from "./client.js?v=20260810f";
 import * as api from "./api.js?v=20260810f";
-import { Icon } from "./icons.js?v=20260810f";
+import { Icon } from "./icons.js?v=20260811a";
 import {
   stageLabel,
   proposalLabel,
@@ -199,6 +199,24 @@ function fmtDate(iso) {
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
 }
 
+/** 수집/알림용 — KST 벽시계로 날짜+시간 */
+function fmtDateTime(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(d);
+  const get = (t) => parts.find((p) => p.type === t)?.value || "";
+  return `${get("year")}.${get("month")}.${get("day")} ${get("hour")}:${get("minute")}`;
+}
+
 function isNew(iso) {
   if (!iso) return false;
   return Date.now() - new Date(iso).getTime() < 24 * 60 * 60 * 1000;
@@ -305,31 +323,31 @@ function renderConfigMissing() {
 }
 
 function renderLogin(errorMsg = "") {
-  const demoId = "tbelltest";
-  const demoPw = "TbellTest0518!";
   appEl.innerHTML = `
     <div class="login-shell">
       <form class="login-card" id="login-form">
         <h1 class="brand">TBELL <span>Employ</span></h1>
-        <p class="sub">아이디 또는 기업 이메일로 로그인합니다.</p>
+        <p class="sub">기업 계정으로 로그인하세요.</p>
         <div class="field">
           <label for="email">아이디 / 이메일</label>
-          <input id="email" name="email" type="text" autocomplete="username" required placeholder="tbelltest 또는 name@tbell.co.kr" />
+          <input id="email" name="email" type="text" autocomplete="username" required placeholder="name@tbell.co.kr" />
         </div>
         <div class="field">
           <label for="password">비밀번호</label>
           <input id="password" name="password" type="password" autocomplete="current-password" required />
         </div>
         <button class="btn btn-primary" type="submit">로그인</button>
-        <button type="button" class="btn btn-ghost" id="btn-access-req" style="width:100%;margin-top:8px">정보 등록 요청</button>
-        <aside class="login-demo" aria-label="테스트 계정 안내">
-          <div class="login-demo-title">테스트 계정</div>
-          <div class="login-demo-row"><span>아이디</span><code>${demoId}</code></div>
-          <div class="login-demo-row"><span>비밀번호</span><code>${demoPw}</code></div>
-          <button type="button" class="btn btn-ghost btn-sm" id="btn-fill-demo">테스트 계정으로 채우기</button>
-        </aside>
         ${errorMsg ? `<div class="err">${esc(errorMsg)}</div>` : ""}
       </form>
+      <div class="login-help" id="login-help">
+        <div class="login-help-menu" id="login-help-menu" hidden>
+          <button type="button" class="login-help-item" id="help-test">테스트 계정 안내</button>
+          <button type="button" class="login-help-item" id="help-access">정보 등록 요청</button>
+        </div>
+        <button type="button" class="login-help-fab" id="login-help-btn" aria-label="문의" aria-expanded="false" title="문의">
+          ${Icon.help({ size: 22, label: "문의" })}
+        </button>
+      </div>
     </div>`;
 
   document.getElementById("login-form").addEventListener("submit", async (e) => {
@@ -346,11 +364,54 @@ function renderLogin(errorMsg = "") {
       renderLogin(err.message || String(err));
     }
   });
-  document.getElementById("btn-access-req")?.addEventListener("click", () => openAccessRequestForm());
-  document.getElementById("btn-fill-demo")?.addEventListener("click", () => {
-    document.getElementById("email").value = demoId;
-    document.getElementById("password").value = demoPw;
-    document.getElementById("password").type = "text";
+
+  const helpBtn = document.getElementById("login-help-btn");
+  const helpMenu = document.getElementById("login-help-menu");
+  helpBtn?.addEventListener("click", () => {
+    const open = helpMenu.hasAttribute("hidden");
+    if (open) helpMenu.removeAttribute("hidden");
+    else helpMenu.setAttribute("hidden", "");
+    helpBtn.setAttribute("aria-expanded", open ? "true" : "false");
+  });
+  document.getElementById("help-test")?.addEventListener("click", () => {
+    helpMenu?.setAttribute("hidden", "");
+    helpBtn?.setAttribute("aria-expanded", "false");
+    openTestAccountHint();
+  });
+  document.getElementById("help-access")?.addEventListener("click", () => {
+    helpMenu?.setAttribute("hidden", "");
+    helpBtn?.setAttribute("aria-expanded", "false");
+    openAccessRequestForm();
+  });
+}
+
+function openTestAccountHint() {
+  const root = document.getElementById("modal-root") || (() => {
+    const el = document.createElement("div");
+    el.id = "modal-root";
+    document.body.appendChild(el);
+    return el;
+  })();
+  root.innerHTML = `
+    <div class="modal-backdrop" id="modal-backdrop">
+      <div class="modal-card" role="dialog" aria-labelledby="test-title">
+        <div class="detail-header" style="padding:0 0 12px;border:0;background:transparent">
+          <div class="detail-header-text">
+            <h3 id="test-title" style="margin:0">테스트 계정</h3>
+            <p class="muted" style="margin:4px 0 0">아이디만 안내합니다. 비밀번호는 표시하지 않습니다.</p>
+          </div>
+          <button type="button" class="detail-close" id="test-cancel" aria-label="닫기">${Icon.close({ size: 18 })}</button>
+        </div>
+        <p style="margin:0;font-size:0.95rem">아이디 <code class="login-id-code">tbelltest</code></p>
+        <p class="muted" style="margin:10px 0 0;font-size:0.85rem">비밀번호는 내부 관리자에게 문의하세요.</p>
+      </div>
+    </div>`;
+  const close = () => {
+    root.innerHTML = "";
+  };
+  document.getElementById("test-cancel")?.addEventListener("click", close);
+  document.getElementById("modal-backdrop")?.addEventListener("click", (e) => {
+    if (e.target.id === "modal-backdrop") close();
   });
 }
 
@@ -370,7 +431,7 @@ function openAccessRequestForm() {
         <div class="detail-header" style="padding:0 0 12px;border:0;background:transparent">
           <div class="detail-header-text">
             <h3 id="access-title" style="margin:0">정보 등록 요청</h3>
-            <p class="muted" style="margin:4px 0 0">관리자(yj.kim@tbell.co.kr)에게 등록 요청 메일이 발송됩니다.</p>
+            <p class="muted" style="margin:4px 0 0">등록에 사용할 이메일을 남겨 주세요. 관리자에게 전달됩니다.</p>
           </div>
           <button type="button" class="detail-close" id="access-cancel" aria-label="닫기">${Icon.close({ size: 18 })}</button>
         </div>
@@ -378,14 +439,6 @@ function openAccessRequestForm() {
           <div class="pf-field">
             <label for="access-email">이메일 *</label>
             <input id="access-email" type="email" required placeholder="name@tbell.co.kr" value="${esc(prefill)}" />
-          </div>
-          <div class="pf-field">
-            <label for="access-name">이름</label>
-            <input id="access-name" placeholder="홍길동" />
-          </div>
-          <div class="pf-field">
-            <label for="access-msg">요청 내용</label>
-            <textarea id="access-msg" rows="3" placeholder="계정 생성 / 권한 요청 등"></textarea>
           </div>
         </div>
         <div class="actions" style="margin-top:16px">
@@ -404,13 +457,13 @@ function openAccessRequestForm() {
   document.getElementById("access-submit")?.addEventListener("click", async () => {
     const email = String(document.getElementById("access-email").value || "").trim().toLowerCase();
     if (!email.includes("@")) return toast("이메일을 입력하세요", true);
-    const displayName = String(document.getElementById("access-name").value || "").trim();
-    const message = String(document.getElementById("access-msg").value || "").trim();
     const btn = document.getElementById("access-submit");
     btn.disabled = true;
     try {
-      await api.submitAccessRequest(sb, { email, displayName, message });
-      toast("등록 요청이 접수되었습니다. 관리자에게 알림이 전달됩니다.");
+      await api.submitAccessRequest(sb, { email, displayName: "", message: "" });
+      // 기존 Auth 계정이면 재설정 메일 시도(존재 여부는 노출하지 않음). 평문 비밀번호는 보낼 수 없음.
+      await api.requestPasswordRecovery(sb, email).catch(() => undefined);
+      toast("요청이 접수되었습니다. 이미 계정이 있으면 비밀번호 재설정 메일도 발송됩니다.");
       close();
     } catch (e) {
       btn.disabled = false;
@@ -2099,14 +2152,27 @@ function renderDashboard() {
   };
 
   const recent = (s.recentApps || [])
-    .map(
-      (r) => `<tr class="dash-row" data-goto-app="${esc(r.id)}">
+    .slice()
+    .sort((a, b) => {
+      const ta = Date.parse(a.created_at || a.alerted_at || "") || 0;
+      const tb = Date.parse(b.created_at || b.alerted_at || "") || 0;
+      return tb - ta;
+    })
+    .map((r) => {
+      const collectedAt = r.created_at || r.alerted_at || null;
+      const collectedTitle = r.created_at
+        ? "DB 수집 시각"
+        : r.alerted_at
+          ? "수집 시각 없음 → 알림 시각"
+          : "";
+      return `<tr class="dash-row" data-goto-app="${esc(r.id)}">
         <td><b>${esc(r.candidate?.name || "(이름 없음)")}</b></td>
         <td class="muted">${esc(r.posting?.title || "공고 미연결")}</td>
         <td><span class="meta-pill stage">${esc(stageLabel(r.current_stage))}</span></td>
         <td class="muted">${esc(fmtDate(r.applied_at))}</td>
-      </tr>`,
-    )
+        <td class="muted" title="${esc(collectedTitle)}">${esc(fmtDateTime(collectedAt))}</td>
+      </tr>`;
+    })
     .join("");
 
   const trendTitle = dashTrendMode === "talents" ? "일별 인재검색 추이" : "일별 지원 추이";
@@ -2166,9 +2232,9 @@ function renderDashboard() {
         <div class="table-scroll">
           <table class="dash-table">
             <thead>
-              <tr><th>이름</th><th>공고</th><th>단계</th><th>지원일</th></tr>
+              <tr><th>이름</th><th>공고</th><th>단계</th><th>지원일</th><th>수집</th></tr>
             </thead>
-            <tbody>${recent || `<tr><td colspan="4" class="muted">없음</td></tr>`}</tbody>
+            <tbody>${recent || `<tr><td colspan="5" class="muted">없음</td></tr>`}</tbody>
           </table>
         </div>
       </div>
