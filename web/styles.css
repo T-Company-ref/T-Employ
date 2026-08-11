@@ -319,13 +319,42 @@ a:hover { text-decoration: underline; }
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 14px;
-  padding: 20px;
   box-shadow: 0 18px 50px rgba(15, 23, 42, 0.18);
   max-height: min(90vh, 900px);
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
 }
 .modal-card.modal-card-wide {
   width: min(640px, 100%);
+}
+.modal-card > .detail-header,
+.modal-card > .modal-header {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  flex-shrink: 0;
+  margin: 0;
+  padding: 16px 20px 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  border-radius: 14px 14px 0 0;
+}
+.modal-card > .modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 14px 20px;
+  -webkit-overflow-scrolling: touch;
+}
+.modal-card > .actions,
+.modal-card > .modal-actions {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 12px 20px 16px;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
 }
 .modal-card h3 { margin: 0 0 4px; font-size: 1.1rem; }
 .modal-card .stack > label,
@@ -355,6 +384,46 @@ a:hover { text-decoration: underline; }
   accent-color: var(--brand);
   cursor: pointer;
 }
+.manual-download {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--text);
+  text-decoration: none;
+  font-size: 0.88rem;
+  font-weight: 600;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.manual-download:hover {
+  border-color: #93c5fd;
+  background: var(--brand-soft, #eff6ff);
+  color: var(--brand);
+}
+.manual-download .ui-icon {
+  flex-shrink: 0;
+  color: var(--brand);
+}
+.manual-download span:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.manual-download__cta {
+  flex-shrink: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--brand);
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #dbeafe;
+}
+
 .pf-field {
   display: flex;
   flex-direction: column;
@@ -546,6 +615,11 @@ a:hover { text-decoration: underline; }
 .interest-list.interest-toggles {
   padding: 8px 10px;
   gap: 6px;
+  max-height: min(280px, 40vh);
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #f8fafc;
 }
 .interest-list.interest-toggles label.toggle-row,
 .interest-list.interest-toggles label.interest-toggle {

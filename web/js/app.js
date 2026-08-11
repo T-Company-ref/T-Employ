@@ -395,21 +395,23 @@ function openPasswordResetForm() {
   root.innerHTML = `
     <div class="modal-backdrop" id="modal-backdrop">
       <div class="modal-card" role="dialog" aria-labelledby="pw-title">
-        <div class="detail-header" style="padding:0 0 12px;border:0;background:transparent">
+        <div class="detail-header">
           <div class="detail-header-text">
             <h3 id="pw-title" style="margin:0">새 비밀번호 설정</h3>
             <p class="muted" style="margin:4px 0 0">메일 링크로 인증되었습니다. 새 비밀번호를 입력하세요.</p>
           </div>
         </div>
-        <label class="field">
-          <span>새 비밀번호</span>
-          <input type="password" id="pw-new" autocomplete="new-password" minlength="6" />
-        </label>
-        <label class="field" style="margin-top:10px">
-          <span>비밀번호 확인</span>
-          <input type="password" id="pw-confirm" autocomplete="new-password" minlength="6" />
-        </label>
-        <div class="modal-actions" style="margin-top:16px">
+        <div class="modal-body">
+          <label class="field">
+            <span>새 비밀번호</span>
+            <input type="password" id="pw-new" autocomplete="new-password" minlength="6" />
+          </label>
+          <label class="field" style="margin-top:10px">
+            <span>비밀번호 확인</span>
+            <input type="password" id="pw-confirm" autocomplete="new-password" minlength="6" />
+          </label>
+        </div>
+        <div class="modal-actions">
           <button type="button" class="btn btn-primary" id="pw-save">저장 후 로그인</button>
         </div>
       </div>
@@ -443,15 +445,17 @@ function openTestAccountHint() {
   root.innerHTML = `
     <div class="modal-backdrop" id="modal-backdrop">
       <div class="modal-card" role="dialog" aria-labelledby="test-title">
-        <div class="detail-header" style="padding:0 0 12px;border:0;background:transparent">
+        <div class="detail-header">
           <div class="detail-header-text">
             <h3 id="test-title" style="margin:0">테스트 계정</h3>
             <p class="muted" style="margin:4px 0 0">아이디만 안내합니다. 비밀번호는 표시하지 않습니다.</p>
           </div>
           <button type="button" class="detail-close" id="test-cancel" aria-label="닫기">${Icon.close({ size: 18 })}</button>
         </div>
-        <p style="margin:0;font-size:0.95rem">아이디 <code class="login-id-code">tbelltest</code></p>
-        <p class="muted" style="margin:10px 0 0;font-size:0.85rem">비밀번호는 내부 관리자에게 문의하세요.</p>
+        <div class="modal-body">
+          <p style="margin:0;font-size:0.95rem">아이디 <code class="login-id-code">tbelltest</code></p>
+          <p class="muted" style="margin:10px 0 0;font-size:0.85rem">비밀번호는 내부 관리자에게 문의하세요.</p>
+        </div>
       </div>
     </div>`;
   const close = () => {
@@ -476,20 +480,22 @@ function openAccessRequestForm() {
   root.innerHTML = `
     <div class="modal-backdrop" id="modal-backdrop">
       <div class="modal-card" role="dialog" aria-labelledby="access-title">
-        <div class="detail-header" style="padding:0 0 12px;border:0;background:transparent">
+        <div class="detail-header">
           <div class="detail-header-text">
             <h3 id="access-title" style="margin:0">정보 등록 요청</h3>
             <p class="muted" style="margin:4px 0 0">등록에 사용할 이메일을 남겨 주세요. 관리자에게 전달됩니다.</p>
           </div>
           <button type="button" class="detail-close" id="access-cancel" aria-label="닫기">${Icon.close({ size: 18 })}</button>
         </div>
-        <div class="stack">
-          <div class="pf-field">
-            <label for="access-email">이메일 *</label>
-            <input id="access-email" type="email" required placeholder="name@tbell.co.kr" value="${esc(prefill)}" />
+        <div class="modal-body">
+          <div class="stack">
+            <div class="pf-field">
+              <label for="access-email">이메일 *</label>
+              <input id="access-email" type="email" required placeholder="name@tbell.co.kr" value="${esc(prefill)}" />
+            </div>
           </div>
         </div>
-        <div class="actions" style="margin-top:16px">
+        <div class="actions">
           <button type="button" class="btn btn-primary btn-sm" id="access-submit" style="width:auto">요청 보내기</button>
         </div>
       </div>
@@ -907,68 +913,79 @@ async function openProfileSettings() {
   root.innerHTML = `
     <div class="modal-backdrop" id="modal-backdrop">
       <div class="modal-card modal-card-wide" role="dialog" aria-labelledby="profile-title">
-        <div class="detail-header" style="padding:0 0 12px;border:0;background:transparent">
+        <div class="detail-header">
           <div class="detail-header-text">
             <h3 id="profile-title" style="margin:0">설정</h3>
             <p class="muted" style="margin:4px 0 0">${esc(staff.email || "")} · ${esc(roleLabel(staff.role))}</p>
           </div>
           <button type="button" class="detail-close" id="pf-cancel" aria-label="닫기">${Icon.close({ size: 18 })}</button>
         </div>
-        <div class="stack">
-          <div class="pf-field">
-            <label for="pf-display">표시 이름</label>
-            <input id="pf-display" value="${esc(staff.display_name || "")}" placeholder="예: 주호정" />
-          </div>
-          <div class="pf-field">
-            <label for="pf-nick">별명 (추천 태그에 표시)</label>
-            <input id="pf-nick" value="${esc(staff.nickname || "")}" placeholder="예: yj.kim" />
-          </div>
-          <div class="pf-field">
-            <label>메일 알림</label>
-            <div class="toggle-list">
-              <label class="toggle-row">
-                <span>실시간 알림</span>
-                <input type="checkbox" class="toggle-input" id="pf-rt" ${rt ? "checked" : ""} />
-                <span class="toggle-ui" aria-hidden="true"></span>
-              </label>
-              <label class="toggle-row">
-                <span>모닝 다이제스트 (07:30)</span>
-                <input type="checkbox" class="toggle-input" id="pf-dg" ${dg ? "checked" : ""} />
-                <span class="toggle-ui" aria-hidden="true"></span>
-              </label>
+        <div class="modal-body">
+          <div class="stack">
+            <div class="pf-field">
+              <label for="pf-display">표시 이름</label>
+              <input id="pf-display" value="${esc(staff.display_name || "")}" placeholder="예: 주호정" />
             </div>
-          </div>
-          <div class="pf-field">
-            <div class="pf-label-row">
-              <label>지원자 알림 · 진행 중 공고</label>
-              <div class="pf-actions-inline">
-                <button type="button" class="btn btn-ghost btn-sm" id="pf-all-on">전체 선택</button>
-                <button type="button" class="btn btn-ghost btn-sm" id="pf-all-off">전체 해제</button>
+            <div class="pf-field">
+              <label for="pf-nick">별명 (추천 태그에 표시)</label>
+              <input id="pf-nick" value="${esc(staff.nickname || "")}" placeholder="예: yj.kim" />
+            </div>
+            <div class="pf-field">
+              <label>메일 알림</label>
+              <div class="toggle-list">
+                <label class="toggle-row">
+                  <span>실시간 알림</span>
+                  <input type="checkbox" class="toggle-input" id="pf-rt" ${rt ? "checked" : ""} />
+                  <span class="toggle-ui" aria-hidden="true"></span>
+                </label>
+                <label class="toggle-row">
+                  <span>모닝 다이제스트 (07:30)</span>
+                  <input type="checkbox" class="toggle-input" id="pf-dg" ${dg ? "checked" : ""} />
+                  <span class="toggle-ui" aria-hidden="true"></span>
+                </label>
               </div>
             </div>
-            <p class="pf-hint">진행 중 공고만 표시됩니다. 모두 끄면 진행 중 전체 공고 알림. 채널을 끄면 메일 미수신. 인재 탐색 요건은 「탐색요건」 탭에서 관리합니다.</p>
-            <div class="interest-list interest-toggles" id="pf-interest">
-              ${
-                openPostings.length
-                  ? openPostings
-                      .map((p) => {
-                        const on = interested.size === 0 || interested.has(p.id);
-                        return `<label class="toggle-row interest-toggle">
-                          <span class="interest-title">
-                            ${esc(p.title || "(제목 없음)")}
-                            <span class="muted"> · ${esc(platformLabel(p.platform))}</span>
-                          </span>
-                          <input type="checkbox" class="toggle-input" data-pid="${esc(p.id)}" ${on ? "checked" : ""} />
-                          <span class="toggle-ui" aria-hidden="true"></span>
-                        </label>`;
-                      })
-                      .join("")
-                  : `<p class="muted">진행 중 공고가 없습니다.</p>`
-              }
+            <div class="pf-field">
+              <div class="pf-label-row">
+                <label>지원자 알림 · 진행 중 공고</label>
+                <div class="pf-actions-inline">
+                  <button type="button" class="btn btn-ghost btn-sm" id="pf-all-on">전체 선택</button>
+                  <button type="button" class="btn btn-ghost btn-sm" id="pf-all-off">전체 해제</button>
+                </div>
+              </div>
+              <p class="pf-hint">진행 중 공고만 표시됩니다. 모두 끄면 진행 중 전체 공고 알림. 채널을 끄면 메일 미수신. 인재 탐색 요건은 「탐색요건」 탭에서 관리합니다.</p>
+              <div class="interest-list interest-toggles" id="pf-interest">
+                ${
+                  openPostings.length
+                    ? openPostings
+                        .map((p) => {
+                          const on = interested.size === 0 || interested.has(p.id);
+                          return `<label class="toggle-row interest-toggle">
+                            <span class="interest-title">
+                              ${esc(p.title || "(제목 없음)")}
+                              <span class="muted"> · ${esc(platformLabel(p.platform))}</span>
+                            </span>
+                            <input type="checkbox" class="toggle-input" data-pid="${esc(p.id)}" ${on ? "checked" : ""} />
+                            <span class="toggle-ui" aria-hidden="true"></span>
+                          </label>`;
+                        })
+                        .join("")
+                    : `<p class="muted">진행 중 공고가 없습니다.</p>`
+                }
+              </div>
+            </div>
+            <div class="pf-field">
+              <label>사용 매뉴얼</label>
+              <p class="pf-hint">로그인·알림·화면 안내가 담긴 PDF입니다.</p>
+              <a class="manual-download" href="./docs/T-Employ-manual.pdf" download="[T-Employ] 사용 매뉴얼_기본.pdf" target="_blank" rel="noopener">
+                ${Icon.file({ size: 16 })}
+                <span>[T-Employ] 사용 매뉴얼_기본.pdf</span>
+                <span class="manual-download__cta">다운로드</span>
+              </a>
             </div>
           </div>
         </div>
-        <div class="actions" style="margin-top:16px">
+        <div class="actions">
           <button type="button" class="btn btn-primary btn-sm" id="pf-save" style="width:auto">저장</button>
         </div>
       </div>
@@ -1115,53 +1132,55 @@ async function openTalentRequirementForm() {
   root.innerHTML = `
     <div class="modal-backdrop" id="modal-backdrop">
       <div class="modal-card modal-card-wide" role="dialog" aria-labelledby="req-title">
-        <div class="detail-header" style="padding:0 0 12px;border:0;background:transparent">
+        <div class="detail-header">
           <div class="detail-header-text">
             <h3 id="req-title" style="margin:0">인재 탐색 요건 등록</h3>
             <p class="muted" style="margin:4px 0 0">필요한 인재 조건을 적으면 DB에 저장되고, 알림이 자동으로 켜집니다.</p>
           </div>
           <button type="button" class="detail-close" id="req-cancel" aria-label="닫기">${Icon.close({ size: 18 })}</button>
         </div>
-        <div class="stack">
-          <div class="pf-field">
-            <label for="req-name">요건 제목 *</label>
-            <input id="req-name" placeholder="예: QA 경력 3년+ · Selenium" />
-          </div>
-          <div class="pf-field">
-            <label for="req-cat">분야</label>
-            <select id="req-cat">
-              <option value="">미지정</option>
-              ${catOpts}
-            </select>
-          </div>
-          <div class="pf-field">
-            <label for="req-keywords">필요 요건 / 키워드 *</label>
-            <textarea id="req-keywords" rows="3" placeholder="예: Selenium, Playwright, 모바일 QA, 즉시 출근 가능"></textarea>
-          </div>
-          <div class="pf-field">
-            <label for="req-career">경력 힌트</label>
-            <input id="req-career" placeholder="예: 3년 이상 / 신입 가능" />
-          </div>
-          <div class="pf-field">
-            <label>플랫폼</label>
-            <div class="notify-checks">
-              <label><input type="checkbox" id="req-jk" checked /> 잡코리아</label>
-              <label><input type="checkbox" id="req-sr" checked /> 사람인</label>
+        <div class="modal-body">
+          <div class="stack">
+            <div class="pf-field">
+              <label for="req-name">요건 제목 *</label>
+              <input id="req-name" placeholder="예: QA 경력 3년+ · Selenium" />
+            </div>
+            <div class="pf-field">
+              <label for="req-cat">분야</label>
+              <select id="req-cat">
+                <option value="">미지정</option>
+                ${catOpts}
+              </select>
+            </div>
+            <div class="pf-field">
+              <label for="req-keywords">필요 요건 / 키워드 *</label>
+              <textarea id="req-keywords" rows="3" placeholder="예: Selenium, Playwright, 모바일 QA, 즉시 출근 가능"></textarea>
+            </div>
+            <div class="pf-field">
+              <label for="req-career">경력 힌트</label>
+              <input id="req-career" placeholder="예: 3년 이상 / 신입 가능" />
+            </div>
+            <div class="pf-field">
+              <label>플랫폼</label>
+              <div class="notify-checks">
+                <label><input type="checkbox" id="req-jk" checked /> 잡코리아</label>
+                <label><input type="checkbox" id="req-sr" checked /> 사람인</label>
+              </div>
+            </div>
+            <div class="pf-field">
+              <label for="req-notes">메모</label>
+              <textarea id="req-notes" rows="2" placeholder="채용 배경, 우대사항 등"></textarea>
+            </div>
+            <div class="pf-field">
+              <label for="req-emails">같이 알림 받을 메일 (쉼표/줄바꿈)</label>
+              <textarea id="req-emails" rows="2" placeholder="예: hj.joo@tbell.co.kr, jonghyuk.kim@tbell.co.kr">${esc(
+                staff.email || "",
+              )}</textarea>
+              <p class="pf-hint">등록자 메일은 항상 포함됩니다. staff 메일이면 다이제스트 알림이 자동으로 켜집니다. 나중에 설정에서 끌 수 있습니다.</p>
             </div>
           </div>
-          <div class="pf-field">
-            <label for="req-notes">메모</label>
-            <textarea id="req-notes" rows="2" placeholder="채용 배경, 우대사항 등"></textarea>
-          </div>
-          <div class="pf-field">
-            <label for="req-emails">같이 알림 받을 메일 (쉼표/줄바꿈)</label>
-            <textarea id="req-emails" rows="2" placeholder="예: hj.joo@tbell.co.kr, jonghyuk.kim@tbell.co.kr">${esc(
-              staff.email || "",
-            )}</textarea>
-            <p class="pf-hint">등록자 메일은 항상 포함됩니다. staff 메일이면 다이제스트 알림이 자동으로 켜집니다. 나중에 설정에서 끌 수 있습니다.</p>
-          </div>
         </div>
-        <div class="actions" style="margin-top:16px;gap:8px">
+        <div class="actions" style="gap:8px">
           <button type="button" class="btn btn-ghost btn-sm" id="req-back" style="width:auto">닫기</button>
           <button type="button" class="btn btn-primary btn-sm" id="req-save" style="width:auto">등록</button>
         </div>
