@@ -87,8 +87,8 @@ a:hover { text-decoration: underline; }
   gap: 10px;
 }
 .login-help-fab {
-  width: 48px;
-  height: 48px;
+  width: 64px;
+  height: 64px;
   border-radius: 999px;
   border: 1px solid var(--line);
   background: var(--surface);
@@ -97,11 +97,17 @@ a:hover { text-decoration: underline; }
   cursor: pointer;
   display: grid;
   place-items: center;
+  font-size: 1.35rem;
+  font-weight: 700;
 }
 .login-help-fab:hover {
   background: var(--brand-soft);
   color: var(--brand);
   border-color: #bfdbfe;
+}
+.login-help-fab .ui-icon {
+  width: 30px;
+  height: 30px;
 }
 .login-help-menu {
   display: flex;

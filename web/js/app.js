@@ -345,7 +345,7 @@ function renderLogin(errorMsg = "") {
           <button type="button" class="login-help-item" id="help-access">정보 등록 요청</button>
         </div>
         <button type="button" class="login-help-fab" id="login-help-btn" aria-label="문의" aria-expanded="false" title="문의">
-          ${Icon.help({ size: 22, label: "문의" })}
+          ${Icon.help({ size: 30, label: "문의" })}
         </button>
       </div>
     </div>`;
@@ -461,9 +461,7 @@ function openAccessRequestForm() {
     btn.disabled = true;
     try {
       await api.submitAccessRequest(sb, { email, displayName: "", message: "" });
-      // 기존 Auth 계정이면 재설정 메일 시도(존재 여부는 노출하지 않음). 평문 비밀번호는 보낼 수 없음.
-      await api.requestPasswordRecovery(sb, email).catch(() => undefined);
-      toast("요청이 접수되었습니다. 이미 계정이 있으면 비밀번호 재설정 메일도 발송됩니다.");
+      toast("요청이 접수되었습니다. 이미 계정이면 비밀번호 재설정 메일이 곧 발송됩니다.");
       close();
     } catch (e) {
       btn.disabled = false;
@@ -2144,6 +2142,8 @@ function renderDashboard() {
     documents: 0,
     applicantsYesterday: 0,
     applicantsThisWeek: 0,
+    talentsYesterday: 0,
+    talentsToday: 0,
     yesterdayLabel: "",
     weekLabel: "",
     recentApps: [],
@@ -2191,19 +2191,19 @@ function renderDashboard() {
       </div>
       <div class="dash-kpis" role="group" aria-label="요약 지표">
         <button type="button" class="dash-kpi" data-jump="applicants">
-          <span class="dash-label">어제</span>
+          <span class="dash-label">어제 지원</span>
           <span class="dash-num">${s.applicantsYesterday ?? 0}</span>
-          <span class="dash-sub muted">${esc(s.yesterdayLabel || "전일")}</span>
+          <span class="dash-sub muted">${esc(s.yesterdayLabel || "전일")} · 지원일 기준</span>
         </button>
         <button type="button" class="dash-kpi" data-jump="applicants">
-          <span class="dash-label">이번주</span>
+          <span class="dash-label">이번주 지원</span>
           <span class="dash-num">${s.applicantsThisWeek ?? 0}</span>
           <span class="dash-sub muted">${esc(s.weekLabel || "월–오늘")}</span>
         </button>
         <button type="button" class="dash-kpi" data-jump="talent">
           <span class="dash-label">인재</span>
           <span class="dash-num">${s.talents}</span>
-          <span class="dash-sub muted">누적</span>
+          <span class="dash-sub muted">누적 · 어제 +${s.talentsYesterday ?? 0}</span>
         </button>
         <button type="button" class="dash-kpi" data-jump="postings">
           <span class="dash-label">공고</span>

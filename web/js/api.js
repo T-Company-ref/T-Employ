@@ -306,7 +306,7 @@ export async function getDashboardStats(sb, { fromKey, toKey } = {}) {
   const yesterdayKey = addDaysToKey(todayKey, -1);
   const weekFrom = weekStartKey(todayKey);
 
-  const [apps, talents, postings, docs, recentApps, kpiAppDates, appRows, talentRows] =
+  const [apps, talents, postings, docs, recentApps, kpiAppDates, kpiTalentDates, appRows, talentRows] =
     await Promise.all([
       sb.from("applications").select("id", { count: "exact", head: true }),
       sb.from("talent_pool_candidates").select("id", { count: "exact", head: true }),
@@ -326,6 +326,12 @@ export async function getDashboardStats(sb, { fromKey, toKey } = {}) {
         .select("applied_at")
         .gte("applied_at", kpiSinceIso)
         .order("applied_at", { ascending: true })
+        .limit(5000),
+      sb
+        .from("talent_pool_candidates")
+        .select("created_at")
+        .gte("created_at", kpiSinceIso)
+        .order("created_at", { ascending: true })
         .limit(5000),
       fetchAllRows(
         () =>
@@ -349,7 +355,7 @@ export async function getDashboardStats(sb, { fromKey, toKey } = {}) {
       ),
     ]);
 
-  for (const r of [apps, talents, postings, docs, recentApps, kpiAppDates]) {
+  for (const r of [apps, talents, postings, docs, recentApps, kpiAppDates, kpiTalentDates]) {
     if (r.error) throw r.error;
   }
 
@@ -360,6 +366,13 @@ export async function getDashboardStats(sb, { fromKey, toKey } = {}) {
     "applied_at",
     (k) => k >= weekFrom && k <= todayKey,
   );
+  const kpiTalentRows = kpiTalentDates.data ?? [];
+  const talentsYesterday = countByDateKeys(
+    kpiTalentRows,
+    "created_at",
+    (k) => k === yesterdayKey,
+  );
+  const talentsToday = countByDateKeys(kpiTalentRows, "created_at", (k) => k === todayKey);
 
   /** @type {Map<string, string>} */
   const postingMap = new Map();
@@ -386,6 +399,8 @@ export async function getDashboardStats(sb, { fromKey, toKey } = {}) {
     documents: docs.count ?? 0,
     applicantsYesterday,
     applicantsThisWeek,
+    talentsYesterday,
+    talentsToday,
     yesterdayLabel: yesterdayKey.slice(5).replace("-", "."),
     weekLabel: `${weekFrom.slice(5).replace("-", ".")}–${todayKey.slice(5).replace("-", ".")}`,
     recentApps: recentApps.data ?? [],
