@@ -3698,12 +3698,29 @@ async function main() {
     if (!sess && !recoveryPending) renderLogin();
   });
 
+  // 우리가 보낸 ?type=recovery&token_hash=… 링크 (localhost Site URL 우회)
+  const params = new URLSearchParams(location.search || "");
+  const tokenHash = params.get("token_hash");
+  const recoveryType = params.get("type");
+  if (tokenHash && recoveryType === "recovery") {
+    try {
+      await api.verifyRecoveryToken(sb, tokenHash);
+      history.replaceState({}, "", location.pathname + (location.hash || ""));
+      recoveryPending = true;
+      openPasswordResetForm();
+      return;
+    } catch (e) {
+      toast(e.message || "재설정 링크가 만료되었거나 유효하지 않습니다", true);
+      renderLogin(e.message || "재설정 링크 오류");
+      return;
+    }
+  }
+
   const session = await api.getSession(sb);
   if (!session) {
     renderLogin();
     return;
   }
-  // recovery 해시로 세션이 잡힌 경우 폼 먼저
   const hash = String(location.hash || "");
   if (/type=recovery/i.test(hash) || /type=recovery/i.test(location.search || "")) {
     openPasswordResetForm();

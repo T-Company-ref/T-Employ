@@ -49,6 +49,18 @@ export async function updatePassword(sb, password) {
   return true;
 }
 
+/** 메일 링크의 token_hash 로 recovery 세션 확정 (Site URL 우회) */
+export async function verifyRecoveryToken(sb, tokenHash) {
+  const th = String(tokenHash || "").trim();
+  if (!th) throw new Error("복구 토큰이 없습니다");
+  const { data, error } = await sb.auth.verifyOtp({
+    type: "recovery",
+    token_hash: th,
+  });
+  if (error) throw error;
+  return data;
+}
+
 export async function signOut(sb) {
   const { error } = await sb.auth.signOut();
   if (error) throw error;
