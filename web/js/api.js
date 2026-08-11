@@ -1005,7 +1005,7 @@ export async function findStaffByEmail(sb, email) {
   return data;
 }
 
-/** 로그인 화면 — 정보 등록 요청 (anon insert) */
+/** 로그인 화면 — 정보 등록 요청 (anon insert, select 없이 — anon SELECT 정책 없음) */
 export async function submitAccessRequest(sb, { email, displayName = "", message = "" }) {
   const row = {
     email: String(email || "").trim().toLowerCase(),
@@ -1014,7 +1014,8 @@ export async function submitAccessRequest(sb, { email, displayName = "", message
     status: "pending",
   };
   if (!row.email.includes("@")) throw new Error("이메일을 확인하세요");
-  const { data, error } = await sb.from("access_requests").insert(row).select("id").single();
+  // insert().select() 는 RETURNING + SELECT RLS 가 필요해 anon에서 실패함
+  const { error } = await sb.from("access_requests").insert(row);
   if (error) throw error;
-  return data;
+  return { ok: true };
 }
