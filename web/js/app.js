@@ -24,6 +24,21 @@ import {
 
 const appEl = document.getElementById("app");
 
+/** 모달은 app-shell(overflow:hidden · 2행 그리드) 밖에 둔다. */
+function modalRoot() {
+  let root = document.getElementById("modal-root");
+  if (!root) {
+    root = document.createElement("div");
+    root.id = "modal-root";
+    document.body.appendChild(root);
+    return root;
+  }
+  if (root.parentElement !== document.body) {
+    document.body.appendChild(root);
+  }
+  return root;
+}
+
 const TAB_HASH = {
   dashboard: "#/dashboard",
   postings: "#/postings",
@@ -885,8 +900,7 @@ async function openProfileSettings() {
     toast("직원 프로필이 연결되지 않았습니다. 관리자에게 문의하세요.", true);
     return;
   }
-  const root = document.getElementById("modal-root");
-  if (!root) return;
+  const root = modalRoot();
 
   let openPostings = [];
   let interested = new Set();
@@ -1122,8 +1136,7 @@ async function openTalentRequirementForm() {
     toast("직원 프로필이 연결되지 않았습니다.", true);
     return;
   }
-  const root = document.getElementById("modal-root");
-  if (!root) return;
+  const root = modalRoot();
 
   const catOpts = JOB_CATEGORIES.filter((c) => c.id !== "all")
     .map((c) => `<option value="${esc(c.id)}">${esc(c.label)}</option>`)
@@ -1420,6 +1433,11 @@ function bindListChrome() {
   });
   bindFilterSelect("f-proposal", (v) => {
     filterProposal = v;
+  });
+  document.getElementById("btn-req-new")?.addEventListener("click", () => {
+    openTalentRequirementForm().catch((e) =>
+      toast(e?.message || "요건 등록 화면을 열 수 없습니다", true),
+    );
   });
 }
 
@@ -1819,7 +1837,6 @@ function paintListPane() {
   bindTalentCategoryNav();
   bindPostingStatusNav();
   bindApplicantSideNav();
-  document.getElementById("btn-req-new")?.addEventListener("click", () => openTalentRequirementForm());
   if (selected?.id) {
     document.querySelector(`.candidate-card[data-id="${selected.id}"]`)?.classList.add("selected");
   }
